@@ -20,6 +20,7 @@ struct PosBucket
    string   comment;
    datetime t_first;
    datetime t_last;
+   bool     is_buy;        // direction captured from the entry-in deal
   };
 
 struct DealSnap
@@ -83,7 +84,8 @@ string ModelColor(const string name)
 
 //+------------------------------------------------------------------+
 void AddBucket(PosBucket &buckets[], const ulong pos_id, const double net,
-               const string cmt, const datetime tm, const long entry)
+               const string cmt, const datetime tm, const long entry,
+               const long deal_type)
   {
    int n = ArraySize(buckets);
    for(int i = 0; i < n; i++)
@@ -97,6 +99,8 @@ void AddBucket(PosBucket &buckets[], const ulong pos_id, const double net,
          buckets[i].t_last = tm;
       if(StringLen(cmt) > 0 && (entry == DEAL_ENTRY_IN || StringLen(buckets[i].comment) == 0))
          buckets[i].comment = cmt;
+      if(entry == DEAL_ENTRY_IN)
+         buckets[i].is_buy = (deal_type == DEAL_TYPE_BUY);
       return;
      }
    ArrayResize(buckets, n + 1);
@@ -105,6 +109,7 @@ void AddBucket(PosBucket &buckets[], const ulong pos_id, const double net,
    buckets[n].comment = cmt;
    buckets[n].t_first = tm;
    buckets[n].t_last = tm;
+   buckets[n].is_buy = (deal_type == DEAL_TYPE_BUY);   // best-effort default
   }
 
 //+------------------------------------------------------------------+
@@ -271,8 +276,9 @@ void SendReport()
       double net = profit + comm + swap + fee;
       datetime tm = (datetime)HistoryDealGetInteger(ticket, DEAL_TIME);
       long entry = HistoryDealGetInteger(ticket, DEAL_ENTRY);
+      long dtype = HistoryDealGetInteger(ticket, DEAL_TYPE);
 
-      AddBucket(buckets, pos_id, net, cmt, tm, entry);
+      AddBucket(buckets, pos_id, net, cmt, tm, entry, dtype);
      }
 
    PosBucket use_buckets[];
@@ -735,6 +741,45 @@ void SendReport()
      }
    open_json += "]";
 
+   // ── Recent closed trades (for live-ticker on the website) ──
+   // Take the N most-recently-closed buckets, emit one JSON object each
+   // with real model/direction/pnl/close_time. Uses `buckets` (full history
+   // when InpTodayOnly=false, else use_buckets which is today-only).
+   const int RECENT_LIMIT = 30;
+   PosBucket src[];
+   int src_n = ArraySize(buckets);
+   ArrayResize(src, src_n);
+   for(int b = 0; b < src_n; b++)
+      src[b] = buckets[b];
+   // Sort descending by t_last (simple O(n^2) — n is small)
+   for(int i = 0; i < src_n - 1; i++)
+      for(int j = 0; j < src_n - i - 1; j++)
+         if(src[j].t_last < src[j + 1].t_last)
+           {
+            PosBucket tmp = src[j];
+            src[j] = src[j + 1];
+            src[j + 1] = tmp;
+           }
+   string recent_json = "[";
+   int rc_n = 0;
+   for(int b = 0; b < src_n && rc_n < RECENT_LIMIT; b++)
+     {
+      string mdl = ModelCanonical(src[b].comment);
+      if(StringLen(mdl) == 0)
+         continue;
+      if(rc_n > 0)
+         recent_json += ",";
+      recent_json += StringFormat(
+         "{\"model\":\"%s\",\"direction\":\"%s\",\"pnl\":%.2f,\"time_close\":\"%s\",\"color\":\"%s\"}",
+         mdl,
+         src[b].is_buy ? "Buy" : "Sell",
+         src[b].net,
+         FmtIsoDate(src[b].t_last),
+         ModelColor(mdl));
+      rc_n++;
+     }
+   recent_json += "]";
+
    long acct = AccountInfoInteger(ACCOUNT_LOGIN);
    string period_str = FmtDateShort(t_min) + " – " + FmtDateShort(t_max);
    string report_date = FmtIsoDate(TimeGMT());
@@ -768,6 +813,7 @@ void SendReport()
    json += StringFormat("\"current_version_net\":%.2f,", cur_net);
    json += StringFormat("\"older_version_trades\":%d,", old_trades);
    json += "\"open_positions\":" + open_json + ",";
+   json += "\"recent_closed\":" + recent_json + ",";
    json += StringFormat("\"floating_pnl\":%.2f,", floating);
    json += "\"equity_curve\":" + eq_json + ",";
    json += "\"dates\":" + dt_json + ",";

@@ -179,6 +179,17 @@ string FmtIsoDate(const datetime t)
   }
 
 //+------------------------------------------------------------------+
+string FmtIsoTimestamp(const datetime t)
+  {
+   MqlDateTime dt;
+   TimeToStruct(t, dt);
+   // Broker-local time — Date.parse() will treat unsuffixed ISO as local,
+   // which is what we want for the ticker's "X hours ago" display.
+   return StringFormat("%04d-%02d-%02dT%02d:%02d:%02d",
+                       dt.year, dt.mon, dt.day, dt.hour, dt.min, dt.sec);
+  }
+
+//+------------------------------------------------------------------+
 datetime BrokerDayStart()
   {
    MqlDateTime dt;
@@ -774,7 +785,7 @@ void SendReport()
          mdl,
          src[b].is_buy ? "Buy" : "Sell",
          src[b].net,
-         FmtIsoDate(src[b].t_last),
+         FmtIsoTimestamp(src[b].t_last),
          ModelColor(mdl));
       rc_n++;
      }

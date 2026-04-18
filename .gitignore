@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Data files (optional - if CSVs are large/generated)
+# labeled_v3.csv
+# swing_v4.csv
+
+# Claude
+.claude/
+
+# Models/outputs
+*.onnx
+*.ubj
+*.json
+models/
+runs/
+outputs/
+
+# OS
+.DS_Store
+# Large data files (>90MB) — regenerate from upstream pipeline / MT5 export
+data/swing_v4.csv
+data/swing_v5_xauusd.csv
+data/labeled_v4.csv
+gbpjpy/data/swing_v5_gbpjpy.csv
+gbpjpy/data/swing_GBPJPY_5m.csv
+gbpjpy/data/labeled_gbpjpy.csv
+gbpjpy/data/cluster_1_Ranging.csv
+gbpjpy/data/cluster_2_TrendRange.csv
+gbpjpy/data/setup_signals_gbpjpy.csv
+eurusd/data/swing_v5_eurusd.csv
+eurusd/data/labeled_eurusd.csv
+eurusd/data/cluster_2_Downtrend.csv
+eurusd/data/setup_signals_eurusd.csv

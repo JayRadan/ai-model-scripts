@@ -1,0 +1,30 @@
+Loading XAU data…
+Precomputing Hurst (DFA)…
+  done 1.2s
+Precomputing OU θ…
+  done 0.7s
+Precomputing entropy…
+  done 2.6s
+Precomputing Kramers escape…
+  done 1.4s
+Precomputing Lévy α…
+  done 0.3s
+Precomputing transfer entropy…
+/home/jay/Desktop/new-model-zigzag/experiments/innovative_rules/phase1_physics_xau.py:160: RuntimeWarning: divide by zero encountered in log2
+  h_cp = -np.nansum(np.where((p_cp>0)&(p_p[None,:]>0), p_cp*np.log2(p_cp/(p_p[None,:]+1e-15)), 0))
+/home/jay/Desktop/new-model-zigzag/experiments/innovative_rules/phase1_physics_xau.py:160: RuntimeWarning: invalid value encountered in multiply
+  h_cp = -np.nansum(np.where((p_cp>0)&(p_p[None,:]>0), p_cp*np.log2(p_cp/(p_p[None,:]+1e-15)), 0))
+  done 9.3s
+Precomputing Fokker-Planck drift…
+  done 0.0s
+Precomputing wavelet energy…
+Traceback (most recent call last):
+  File "/home/jay/Desktop/new-model-zigzag/experiments/innovative_rules/phase1_physics_xau.py", line 434, in <module>
+    main()
+  File "/home/jay/Desktop/new-model-zigzag/experiments/innovative_rules/phase1_physics_xau.py", line 370, in main
+    store(rolling_wavelet_energy(c_s, window=120), "wavelet_eratio")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jay/Desktop/new-model-zigzag/experiments/innovative_rules/phase1_physics_xau.py", line 194, in rolling_wavelet_energy
+    cwt_t = scipy_signal.cwt(seg_norm, scipy_signal.ricker, [20])
+            ^^^^^^^^^^^^^^^^
+AttributeError: module 'scipy.signal' has no attribute 'cwt'. Did you mean: 'czt'?

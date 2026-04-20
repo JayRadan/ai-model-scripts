@@ -20,6 +20,7 @@
 input string   PostUrl           = "https://edgepredictor.pro/api/tick";
 input string   AuthSecret        = "";          // optional: set same value as TICK_SECRET env var on server
 input int      PostEverySec      = 5;           // how often to POST (seconds)
+input int      HistoryBars       = 288;         // how many past bars to send each POST (288 = 24h of M5)
 input string   ReportedSymbol    = "XAUUSD";    // symbol name sent to the website (normalised across brokers)
 input bool     VerboseLog        = false;       // print every POST result
 
@@ -51,9 +52,11 @@ void ReportTick()
 {
    // Always pull from the chart's own symbol + timeframe so the EA works on
    // brokers that use suffixes (XAUUSD-ECN, XAUUSDm, XAUUSD.i, etc.).
+   // Pull HistoryBars+1 so we have the current forming bar [0] + N past bars.
+   int need = MathMax(1, HistoryBars) + 1;
    MqlRates rates[];
    ArraySetAsSeries(rates, true);
-   int got = CopyRates(_Symbol, _Period, 0, 1, rates);
+   int got = CopyRates(_Symbol, _Period, 0, need, rates);
    if(got <= 0)
      {
       if(VerboseLog) PrintFormat("LiveTickReporter: CopyRates failed for %s %s (err=%d)",
@@ -69,26 +72,45 @@ void ReportTick()
       return;
      }
 
-   // Use DoubleToString so we always get a "." decimal separator regardless
-   // of the Windows locale (German/French/Russian locales use "," which is
-   // invalid JSON and causes HTTP 400 on the server).
+   string s_bid = DoubleToString(tick.bid, 2);
+   string s_ask = DoubleToString(tick.ask, 2);
+
+   // Build history array — indexed from 1..got-1 (skip [0] which is the
+   // forming bar, sent separately as `bar`). Oldest first so the client
+   // can append directly without re-sorting.
+   string hist = "[";
+   for(int i = got - 1; i >= 1; --i)
+     {
+      if(i < got - 1) hist += ",";
+      hist += StringFormat(
+         "{\"t\":%I64d,\"o\":%s,\"h\":%s,\"l\":%s,\"c\":%s,\"v\":%I64d}",
+         (long)rates[i].time,
+         DoubleToString(rates[i].open,  2),
+         DoubleToString(rates[i].high,  2),
+         DoubleToString(rates[i].low,   2),
+         DoubleToString(rates[i].close, 2),
+         rates[i].tick_volume
+      );
+     }
+   hist += "]";
+
+   // Current (forming) bar
    string s_o = DoubleToString(rates[0].open,  2);
    string s_h = DoubleToString(rates[0].high,  2);
    string s_l = DoubleToString(rates[0].low,   2);
    string s_c = DoubleToString(rates[0].close, 2);
-   string s_bid = DoubleToString(tick.bid, 2);
-   string s_ask = DoubleToString(tick.ask, 2);
 
    // We report normalised "XAUUSD" + "PERIOD_M5" (or whatever the chart is on)
    // so the server's keyed lookup stays stable across brokers.
    string body = StringFormat(
-      "{\"symbol\":\"%s\",\"tf\":\"%s\",\"bar\":{\"t\":%I64d,\"o\":%s,\"h\":%s,\"l\":%s,\"c\":%s,\"v\":%I64d},\"tick\":{\"bid\":%s,\"ask\":%s,\"t\":%I64d},\"ts\":%I64d}",
+      "{\"symbol\":\"%s\",\"tf\":\"%s\",\"bar\":{\"t\":%I64d,\"o\":%s,\"h\":%s,\"l\":%s,\"c\":%s,\"v\":%I64d},\"tick\":{\"bid\":%s,\"ask\":%s,\"t\":%I64d},\"history\":%s,\"ts\":%I64d}",
       ReportedSymbol,
       EnumToString(_Period),
       (long)rates[0].time,
       s_o, s_h, s_l, s_c,
       rates[0].tick_volume,
       s_bid, s_ask, (long)tick.time,
+      hist,
       (long)TimeCurrent()
    );
 

@@ -69,16 +69,26 @@ void ReportTick()
       return;
      }
 
+   // Use DoubleToString so we always get a "." decimal separator regardless
+   // of the Windows locale (German/French/Russian locales use "," which is
+   // invalid JSON and causes HTTP 400 on the server).
+   string s_o = DoubleToString(rates[0].open,  2);
+   string s_h = DoubleToString(rates[0].high,  2);
+   string s_l = DoubleToString(rates[0].low,   2);
+   string s_c = DoubleToString(rates[0].close, 2);
+   string s_bid = DoubleToString(tick.bid, 2);
+   string s_ask = DoubleToString(tick.ask, 2);
+
    // We report normalised "XAUUSD" + "PERIOD_M5" (or whatever the chart is on)
    // so the server's keyed lookup stays stable across brokers.
    string body = StringFormat(
-      "{\"symbol\":\"%s\",\"tf\":\"%s\",\"bar\":{\"t\":%I64d,\"o\":%.2f,\"h\":%.2f,\"l\":%.2f,\"c\":%.2f,\"v\":%I64d},\"tick\":{\"bid\":%.2f,\"ask\":%.2f,\"t\":%I64d},\"ts\":%I64d}",
+      "{\"symbol\":\"%s\",\"tf\":\"%s\",\"bar\":{\"t\":%I64d,\"o\":%s,\"h\":%s,\"l\":%s,\"c\":%s,\"v\":%I64d},\"tick\":{\"bid\":%s,\"ask\":%s,\"t\":%I64d},\"ts\":%I64d}",
       ReportedSymbol,
       EnumToString(_Period),
       (long)rates[0].time,
-      rates[0].open, rates[0].high, rates[0].low, rates[0].close,
+      s_o, s_h, s_l, s_c,
       rates[0].tick_volume,
-      tick.bid, tick.ask, (long)tick.time,
+      s_bid, s_ask, (long)tick.time,
       (long)TimeCurrent()
    );
 

@@ -87,7 +87,7 @@ double   g_total_pnl        = 0;
 double   g_max_dd           = 0;
 string   g_last_signal      = "—";
 
-#define REPORT_INTERVAL_BARS 12   // report stats every ~1h (12 x M5)
+#define REPORT_INTERVAL_BARS 2    // report stats every 10 min (2 x M5)
 
 //+------------------------------------------------------------------+
 //| Chart styling, dashboard, watermark, stats reporting              |

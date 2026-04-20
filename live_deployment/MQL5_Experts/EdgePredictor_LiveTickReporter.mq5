@@ -92,9 +92,18 @@ void ReportTick()
       (long)TimeCurrent()
    );
 
+   // Convert body to UTF-8 byte array using WHOLE_ARRAY so we get a reliable
+   // count back; then trim exactly one byte for the trailing null terminator.
+   // (count=StringLen(...) inconsistently appends the null which caused the
+   //  closing '}' to get chopped → server saw malformed JSON → HTTP 400.)
    char post_data[], result[];
-   StringToCharArray(body, post_data, 0, StringLen(body), CP_UTF8);
-   ArrayResize(post_data, ArraySize(post_data) - 1);
+   int converted = StringToCharArray(body, post_data, 0, WHOLE_ARRAY, CP_UTF8);
+   if(converted <= 1)
+     {
+      Print("LiveTickReporter: StringToCharArray failed");
+      return;
+     }
+   ArrayResize(post_data, converted - 1);
 
    string headers = "Content-Type: application/json\r\n";
    if(StringLen(AuthSecret) > 0)
@@ -104,8 +113,21 @@ void ReportTick()
    ResetLastError();
    int status = WebRequest("POST", PostUrl, headers, 5000, post_data, result, result_headers);
    if(status == -1)
+     {
       PrintFormat("LiveTickReporter WebRequest error %d (whitelist %s?)", GetLastError(), PostUrl);
-   else if(VerboseLog)
+     }
+   else if(status != 200)
+     {
+      // On error, dump the body we sent + server's response so the cause is
+      // visible instead of silent-failing.
+      string resp = CharArrayToString(result, 0, -1, CP_UTF8);
       PrintFormat("LiveTickReporter POST %s -> HTTP %d", ReportedSymbol, status);
+      PrintFormat("  body: %s", body);
+      PrintFormat("  resp: %s", resp);
+     }
+   else if(VerboseLog)
+     {
+      PrintFormat("LiveTickReporter POST %s -> HTTP %d", ReportedSymbol, status);
+     }
 }
 //+------------------------------------------------------------------+

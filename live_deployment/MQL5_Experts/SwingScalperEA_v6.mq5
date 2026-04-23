@@ -71,6 +71,7 @@ int g_vwap_day = -1;
 CTrade   g_trade;
 datetime g_last_bar    = 0;
 int      g_bars_since_refresh = 0;
+int      g_last_regime_day   = -1;
 int      g_rule_cooldown[RULE_COUNT];
 double   g_prev_stoch_k = 0.5;
 bool     g_licensed         = false;
@@ -667,7 +668,7 @@ void RefreshActiveRegime()
    double fp[REGIME_N_FEATS];
    ComputeWeekFingerprint(week, fp);
    g_active_cluster = ClassifyRegime(fp);
-   Print("v5: active regime = C", g_active_cluster, " ", REGIME_NAMES[g_active_cluster],
+   Print("v6: active regime = C", g_active_cluster, " ", REGIME_NAMES[g_active_cluster],
          " (tradeable=", REGIME_TRADEABLE[g_active_cluster], ")");
 }
 
@@ -895,13 +896,38 @@ int OnInit()
    g_bars_since_lic = 0;
 
    RefreshActiveRegime();
-   g_bars_since_refresh = 0;
+   g_last_regime_day = (int)(TimeCurrent() / 86400);
+
+   // Recover any open position after recompile / reload / MT5 restart.
+   for(int p = PositionsTotal() - 1; p >= 0; p--)
+   {
+      ulong ticket = PositionGetTicket(p); if(ticket == 0) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != InpMagic) continue;
+      if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+
+      g_entry_price = PositionGetDouble(POSITION_PRICE_OPEN);
+      g_entry_dir   = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? +1 : -1;
+
+      MqlRates rb[]; ArraySetAsSeries(rb, true);
+      if(CopyRates(_Symbol, MODEL_TF, 0, 30, rb) >= 20)
+         g_entry_atr = RawATR14(rb, 0);
+      if(g_entry_atr < 1e-10) g_entry_atr = 1e-10;
+
+      datetime t_open = (datetime)PositionGetInteger(POSITION_TIME);
+      int secs_per_bar = PeriodSeconds(MODEL_TF);
+      g_bars_held = (secs_per_bar > 0) ? (int)((TimeCurrent() - t_open) / secs_per_bar) : 0;
+      if(g_bars_held < 0) g_bars_held = 0;
+
+      PrintFormat("v6 RECOVERED open position: ticket=%I64u dir=%+d entry=%.2f atr=%.2f bars_held=%d",
+                  ticket, g_entry_dir, g_entry_price, g_entry_atr, g_bars_held);
+      break;
+   }
+
    RefreshTradeStats();
    UpdateDashboard();
 
-   PrintFormat("EdgePredictor Midas ready | regime=C%d %s | refresh=%d bars long=%s short=%s",
+   PrintFormat("EdgePredictor Midas ready | regime=C%d %s | refresh=daily (00:00 UTC) long=%s short=%s",
                g_active_cluster, REGIME_NAMES[g_active_cluster],
-               InpRegimeRefreshBars,
                InpAllowLong?"Y":"N", InpAllowShort?"Y":"N");
    return INIT_SUCCEEDED;
 }
@@ -940,11 +966,13 @@ void OnTick()
       g_bars_since_report = 0;
    }
 
-   // Periodic regime refresh
-   if(++g_bars_since_refresh >= InpRegimeRefreshBars)
+   // Calendar-anchored regime refresh — fires on first tick of each new UTC day
+   // so every user's EA converges on the same cluster regardless of start time.
+   int day_today = (int)(TimeCurrent() / 86400);
+   if(day_today > g_last_regime_day)
    {
       RefreshActiveRegime();
-      g_bars_since_refresh = 0;
+      g_last_regime_day = day_today;
    }
 
    // Decrement per-rule cooldowns
@@ -966,7 +994,7 @@ void OnTick()
    ArraySetAsSeries(rb, true);
    if(CopyRates(_Symbol, MODEL_TF, 1, LOOKBACK, rb) < LOOKBACK)
    {
-      if(InpVerbose) Print("v5: CopyRates insufficient");
+      if(InpVerbose) Print("v6: CopyRates insufficient");
       return;
    }
 
@@ -975,7 +1003,7 @@ void OnTick()
    if(spread_pts > InpMaxSpread)
    {
       if(InpVerbose)
-         PrintFormat("v5: spread %d > %d, skipping", (int)spread_pts, InpMaxSpread);
+         PrintFormat("v6: spread %d > %d, skipping", (int)spread_pts, InpMaxSpread);
       return;
    }
 
@@ -1064,7 +1092,7 @@ void OnTick()
    double lot_mult = (vol_regime >= 0) ? REGIME_V4_LOT_MULT[vol_regime] : 1.0;
    double lots = NormLots(InpLots * lot_mult);
    if(InpVerbose && vol_regime >= 0)
-      PrintFormat("v5: vol=%s (p=%.2f) lot_mult=%.2fx base=%.2f final=%.2f",
+      PrintFormat("v6: vol=%s (p=%.2f) lot_mult=%.2fx base=%.2f final=%.2f",
                   REGIME_V4_NAMES[vol_regime], regime_prob, lot_mult, InpLots, lots);
 
    bool ok = false;
@@ -1083,6 +1111,6 @@ void OnTick()
       if(ok) { g_entry_price=tick.bid; g_entry_atr=atr; g_entry_dir=-1; g_bars_held=0; }
    }
    if(!ok && InpVerbose)
-      PrintFormat("v5: order failed (%d)", GetLastError());
+      PrintFormat("v6: order failed (%d)", GetLastError());
 }
 //+------------------------------------------------------------------+

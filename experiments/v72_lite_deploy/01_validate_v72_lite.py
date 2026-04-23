@@ -163,34 +163,66 @@ def train_exit(train_conf_df, swing, atr):
 
 
 def simulate(confirmed, swing, atr, exit_mdl):
+    """Batched: precompute all (trade,bar) exit features, one predict_proba call."""
     time_to_idx = pd.Series(swing.index.values, index=swing["time"].values)
     C = swing["close"].values.astype(np.float64); n = len(C)
-    rows = []
+    # Precompute context arrays for the exit features
+    ctx_cols = ["hurst_rs","ou_theta","entropy_rate","kramers_up","wavelet_er",
+                "quantum_flow","quantum_flow_h4","vwap_dist"]
+    ctx_arr = swing[ctx_cols].fillna(0).values.astype(np.float64)
+
+    entries = []
     for _, s in confirmed.iterrows():
         t = s["time"]
         if t not in time_to_idx.index: continue
-        ei = int(time_to_idx[t]); d = int(s["direction"])
-        ep = C[ei]; ea = atr[ei]
+        ei = int(time_to_idx[t])
+        ea = atr[ei]
         if not np.isfinite(ea) or ea <= 0: continue
-        xi, xr = None, "max"
-        for k in range(1, MAX_HOLD+1):
+        entries.append((ei, int(s["direction"]), t, int(s["cid"]), s["rule"]))
+
+    N = len(entries)
+    if N == 0: return pd.DataFrame()
+
+    n_feats = 3 + len(ctx_cols)
+    X = np.zeros((N * MAX_HOLD, n_feats), dtype=np.float32)
+    valid = np.zeros(N * MAX_HOLD, dtype=bool)
+    cps = np.full((N, MAX_HOLD), np.nan, dtype=np.float64)
+
+    for rank, (ei, d, _, _, _) in enumerate(entries):
+        ep = C[ei]; ea = atr[ei]
+        for k in range(1, MAX_HOLD + 1):
             bar = ei + k
             if bar >= n: break
             cp = d * (C[bar] - ep) / ea
+            cps[rank, k-1] = cp
+            if k < MIN_HOLD: continue
+            p3 = d * (C[bar-3] - ep) / ea if k >= 3 else cp
+            row = rank * MAX_HOLD + (k - 1)
+            X[row, 0] = cp; X[row, 1] = float(k); X[row, 2] = cp - p3
+            X[row, 3:] = ctx_arr[bar]
+            valid[row] = True
+
+    probs = np.zeros(N * MAX_HOLD, dtype=np.float32)
+    if valid.any():
+        probs[valid] = exit_mdl.predict_proba(X[valid])[:, 1]
+
+    rows = []
+    for rank, (ei, d, t, cid_v, rule_v) in enumerate(entries):
+        ep = C[ei]
+        xi, xr = None, "max"
+        for k in range(1, MAX_HOLD + 1):
+            bar = ei + k
+            if bar >= n: break
+            cp = cps[rank, k-1]
+            if not np.isfinite(cp): break
             if cp < -SL_HARD: xi, xr = bar, "hard_sl"; break
             if k >= MIN_HOLD:
-                p3 = d * (C[bar-3] - ep) / ea if k >= 3 else cp
-                X_ = np.array([[cp, float(k), cp - p3,
-                                swing["hurst_rs"].iat[bar], swing["ou_theta"].iat[bar],
-                                swing["entropy_rate"].iat[bar], swing["kramers_up"].iat[bar],
-                                swing["wavelet_er"].iat[bar], swing["quantum_flow"].iat[bar],
-                                swing["quantum_flow_h4"].iat[bar], swing["vwap_dist"].iat[bar]]])
-                if exit_mdl.predict_proba(X_)[0, 1] >= EXIT_THRESHOLD:
+                if probs[rank * MAX_HOLD + (k-1)] >= EXIT_THRESHOLD:
                     xi, xr = bar, "ml_exit"; break
         if xi is None:
             xi = min(ei + MAX_HOLD, n-1); xr = "max"
-        pnl = d * (C[xi] - ep) / ea
-        rows.append({"time": t, "cid": int(s["cid"]), "rule": s["rule"],
+        pnl = d * (C[xi] - ep) / atr[ei]
+        rows.append({"time": t, "cid": cid_v, "rule": rule_v,
                      "direction": d, "bars": xi - ei, "pnl_R": pnl, "exit": xr})
     return pd.DataFrame(rows)
 
@@ -274,6 +306,11 @@ def main():
     print(f"  After meta filter: {len(tec_m):,}  (dropped {len(tec)-len(tec_m):,})")
     t72_trades = simulate(tec_m, swing, atr, exit_mdl)
     r72 = report(t72_trades, "v7.2-lite + META")
+
+    # Dump holdout trades for downstream analysis (regime detector, etc.)
+    out_trades = "/home/jay/Desktop/new-model-zigzag/data/v72l_trades_holdout.csv"
+    t72_trades.to_csv(out_trades, index=False)
+    print(f"  Dumped {len(t72_trades):,} holdout trades to {out_trades}")
 
     if r71 and r72:
         print(f"\n{'='*78}")

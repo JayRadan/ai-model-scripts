@@ -25,7 +25,17 @@ outputs/
 # Large data files (>90MB) — regenerate from upstream pipeline / MT5 export
 data/swing_v4.csv
 data/swing_v5_xauusd.csv
+data/swing_v5_btc.csv
 data/labeled_v4.csv
+data/cluster_*_data.csv
+data/cluster_*_data_btc.csv
+data/setups_*_btc.csv
+data/setups_*_v6_btc.csv
+data/setups_*_v72l_btc.csv
+data/setups_*_v72l.csv
+# Build artifacts from v6 Midas validation
+experiments/v6_xau_deploy/_v6_validated_raw.pkl
+data/v6_trades_holdout_xau.csv
 gbpjpy/data/swing_v5_gbpjpy.csv
 gbpjpy/data/swing_GBPJPY_5m.csv
 gbpjpy/data/labeled_gbpjpy.csv

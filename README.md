@@ -54,6 +54,9 @@ new-model-zigzag/
 ├── README.md                          ← you are here
 │
 ├── data/                              ← all CSVs + JSON artifacts
+│   ├── samples/                          **head -200 of every key CSV, gitted.**
+│   │                                     Open these to see column schemas without
+│   │                                     regenerating the (gitignored) full files.
 │   ├── swing_v5_xauusd.csv               M5 OHLC + 21 micro + H1/H4 context + label (XAU)
 │   ├── swing_v5_btc.csv                  same schema (BTC)
 │   ├── regime_selector_K4.json           XAU K=5 centroids/scaler/PCA
@@ -316,9 +319,15 @@ The Render deploy picks up the server whitelist change; Next.js deploy picks up 
 
 | Product | Asset | Period | Trades | WR | PF | Total R | MaxDD R |
 |---|---|---|---|---|---|---|---|
-| Midas | XAUUSD | v6, ~Feb 2024+ | 2,557 | 39.0% | 1.73 | +2,454$ | -56$ |
-| Oracle | XAUUSD | v7.2-lite, Dec 2024+ | 1,367 | 65.3% | 3.48 | +1,947$ | -34$ |
-| BTC | BTCUSD | v7.2-lite, Dec 2024+ | 2,439 | 54.9% | 1.84 | +21,674$ | -522$ |
+| Midas  | XAUUSD | v6 per-rule 80/20 holdout        | 2,636 | 57.4% | 2.24 | +5,093R | -80R  |
+| Oracle | XAUUSD | v7.2-lite, Dec 2024+             | 1,367 | 65.3% | 3.48 | +1,947R | -34R  |
+| BTC    | BTCUSD | v7.2-lite, Dec 2024+             | 2,439 | 54.9% | 1.84 | +21,674R | -522R |
+
+Midas numbers are from the April 2026 revalidation (`experiments/v6_xau_deploy/01_validate_v6.py`),
+which is the script that produces the pickle the live server serves; the
+older v6 backtest summary file (`data/backtest_v6_summary.json`, PF 1.34)
+used a fixed-TP labelling that no longer matches the production ML-exit
+path and is retained only for historical reference.
 
 All at `0.01 lot`, clean holdout. Gold PnL absolute is smaller because XAU at 0.01 = $0.01/dollar-move vs BTC at 0.01 = $0.01/dollar-move but BTC ATR is ~10× larger in dollars.
 
@@ -413,3 +422,19 @@ git add -f <files> && git commit && git push
 | What changed in the last model rev | `git log models/v7_deploy_<inst>.json` + the commit message |
 | MT5 Experts log location | `~/.mt5/drive_c/Program Files/MetaTrader 5/MQL5/Logs/` |
 | License server endpoint | `commercial/server/server.py` → `/license` + `/model` routes |
+| How to ship a retrained model to prod | `commercial/server/decision_engine/DEPLOY.md` |
+| Sample rows of every training CSV | `data/samples/README.md` |
+
+---
+
+## 9. Shipping a retrained model
+
+**Note:** since April 2026, live inference runs on the FastAPI "decision
+engine" (the `/decide/{product}` endpoint on Render), *not* from ONNX
+files on the customer's MT5. The EA is a thin client that POSTs bars.
+
+That means retraining is no longer "regen ONNX → upload to license
+server → user downloads" — it is "regen pickled XGB bundle → push to
+server repo → Render auto-deploy → all customers live on the new
+models in ~60 s". Full steps:
+`commercial/server/decision_engine/DEPLOY.md`.

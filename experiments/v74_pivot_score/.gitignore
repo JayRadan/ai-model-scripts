@@ -1,0 +1,6 @@
+data/*.csv
+models/*.json
+models/*.pkl
+reports/*.png
+reports/*.csv
+__pycache__/

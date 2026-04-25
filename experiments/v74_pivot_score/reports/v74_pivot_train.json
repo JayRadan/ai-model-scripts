@@ -1,0 +1,207 @@
+{
+  "target": "is_pivot_25",
+  "n_train": 815459,
+  "n_val": 90606,
+  "n_holdout": 93929,
+  "auc_val": 0.7016249306148493,
+  "auc_holdout": 0.653014291771896,
+  "threshold_sweep_holdout": [
+    {
+      "thr": 0.05,
+      "fires": 80085,
+      "fires_per_day": 164.1646737273659,
+      "pivot_rate": 0.20541924205531623
+    },
+    {
+      "thr": 0.08,
+      "fires": 65717,
+      "fires_per_day": 134.7119918004783,
+      "pivot_rate": 0.22461463548244748
+    },
+    {
+      "thr": 0.1,
+      "fires": 56268,
+      "fires_per_day": 115.34267167748548,
+      "pivot_rate": 0.2388391270349044
+    },
+    {
+      "thr": 0.12,
+      "fires": 47699,
+      "fires_per_day": 97.77724632729758,
+      "pivot_rate": 0.250864798004151
+    },
+    {
+      "thr": 0.15,
+      "fires": 36636,
+      "fires_per_day": 75.09941920054663,
+      "pivot_rate": 0.26820613604105253
+    },
+    {
+      "thr": 0.2,
+      "fires": 22648,
+      "fires_per_day": 46.42569183464298,
+      "pivot_rate": 0.3024108089014482
+    },
+    {
+      "thr": 0.25,
+      "fires": 12631,
+      "fires_per_day": 25.892039631021525,
+      "pivot_rate": 0.3397989074499248
+    },
+    {
+      "thr": 0.3,
+      "fires": 6502,
+      "fires_per_day": 13.328322514519988,
+      "pivot_rate": 0.3749615502922178
+    },
+    {
+      "thr": 0.4,
+      "fires": 1493,
+      "fires_per_day": 3.060471472497438,
+      "pivot_rate": 0.4212993971868721
+    },
+    {
+      "thr": 0.5,
+      "fires": 410,
+      "fires_per_day": 0.8404509736932012,
+      "pivot_rate": 0.5073170731707317
+    }
+  ],
+  "top_features": [
+    {
+      "name": "hour_enc",
+      "imp": 0.1016642302274704
+    },
+    {
+      "name": "hawkes_eta",
+      "imp": 0.10020812600851059
+    },
+    {
+      "name": "dist_round_10",
+      "imp": 0.041142214089632034
+    },
+    {
+      "name": "vpin",
+      "imp": 0.04001511633396149
+    },
+    {
+      "name": "sig_quad_var",
+      "imp": 0.037599995732307434
+    },
+    {
+      "name": "quantum_flow",
+      "imp": 0.036687277257442474
+    },
+    {
+      "name": "dist_session_hod",
+      "imp": 0.03666916489601135
+    },
+    {
+      "name": "dow_enc",
+      "imp": 0.0359613262116909
+    },
+    {
+      "name": "dist_session_lod",
+      "imp": 0.03580109030008316
+    },
+    {
+      "name": "ou_theta",
+      "imp": 0.0342707559466362
+    },
+    {
+      "name": "har_rv_ratio",
+      "imp": 0.03220968693494797
+    },
+    {
+      "name": "dist_round_50",
+      "imp": 0.02947056107223034
+    },
+    {
+      "name": "dist_h4_swing_low",
+      "imp": 0.02741158753633499
+    },
+    {
+      "name": "dist_h1_swing_high",
+      "imp": 0.027217518538236618
+    },
+    {
+      "name": "dist_h1_swing_low",
+      "imp": 0.026254205033183098
+    },
+    {
+      "name": "dist_h4_swing_high",
+      "imp": 0.025887584313750267
+    },
+    {
+      "name": "quantum_flow_h4",
+      "imp": 0.025746462866663933
+    },
+    {
+      "name": "vwap_dist",
+      "imp": 0.023428771644830704
+    },
+    {
+      "name": "rsi_h1",
+      "imp": 0.022210823372006416
+    },
+    {
+      "name": "entropy_rate",
+      "imp": 0.020446600392460823
+    }
+  ],
+  "feat_cols": [
+    "f01_CPR",
+    "f02_WickAsym",
+    "f03_BEF",
+    "f04_TCS",
+    "f05_SPI",
+    "f06_LRSlope",
+    "f07_RECR",
+    "f08_SCM",
+    "f09_HLER",
+    "f10_EP",
+    "f11_KE",
+    "f12_MCS",
+    "f13_Work",
+    "f14_EDR",
+    "f15_AI",
+    "f16_PPShigh",
+    "f16_PPSlow",
+    "f17_SCR",
+    "f18_RVD",
+    "f19_WBER",
+    "f20_NCDE",
+    "hurst_rs",
+    "ou_theta",
+    "entropy_rate",
+    "kramers_up",
+    "wavelet_er",
+    "vwap_dist",
+    "hour_enc",
+    "dow_enc",
+    "quantum_flow",
+    "quantum_flow_h4",
+    "quantum_momentum",
+    "quantum_vwap_conf",
+    "quantum_divergence",
+    "quantum_div_strength",
+    "vpin",
+    "sig_quad_var",
+    "har_rv_ratio",
+    "hawkes_eta",
+    "rsi14",
+    "leg_age_bars",
+    "wick_signed",
+    "range_atr_ratio",
+    "dist_h1_swing_high",
+    "dist_h1_swing_low",
+    "dist_h4_swing_high",
+    "dist_h4_swing_low",
+    "rsi_h1",
+    "dist_session_hod",
+    "dist_session_lod",
+    "dist_round_50",
+    "dist_round_10",
+    "streak_count"
+  ]
+}

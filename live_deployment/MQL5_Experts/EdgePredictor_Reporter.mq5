@@ -56,18 +56,21 @@ bool IsOurSymbol(const string sym)
 //+------------------------------------------------------------------+
 bool IsCurrentEP(const string cmt)
   {
-   return (StringFind(cmt, "V6-") == 0 ||
-           StringFind(cmt, "V7-") == 0 ||
+   return (StringFind(cmt, "V6-")  == 0 ||
+           StringFind(cmt, "V7-")  == 0 ||
+           StringFind(cmt, "BTC-") == 0 ||
            StringFind(cmt, "EP-DQN-B") >= 0);
   }
 
 //+------------------------------------------------------------------+
 string ModelCanonical(const string cmt)
   {
-   if(StringFind(cmt, "V6-") == 0)
+   if(StringFind(cmt, "V6-")  == 0)
       return "EdgePredictor Midas";
-   if(StringFind(cmt, "V7-") == 0)
+   if(StringFind(cmt, "V7-")  == 0)
       return "EdgePredictor Oracle";
+   if(StringFind(cmt, "BTC-") == 0)
+      return "EdgePredictor BTC";
    if(StringFind(cmt, "EP-DQN-B") >= 0)
       return "EdgePredictor Phantom";
    return "";
@@ -79,6 +82,7 @@ string ModelColor(const string name)
    if(name == "EdgePredictor Midas")     return "#10b981";
    if(name == "EdgePredictor Phantom")   return "#a855f7";
    if(name == "EdgePredictor Oracle")    return "#6366f1";
+   if(name == "EdgePredictor BTC")       return "#f59e0b";
    return "#888888";
   }
 

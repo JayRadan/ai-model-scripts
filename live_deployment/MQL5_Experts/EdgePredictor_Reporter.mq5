@@ -676,32 +676,10 @@ void SendReport()
          mc_dt += "\"" + mds + "\"";
         }
 
-      double model_floating = 0.0;
-      for(int pi = 0; pi < PositionsTotal(); pi++)
-        {
-         ulong pt = PositionGetTicket(pi);
-         if(pt == 0 || !PositionSelectByTicket(pt))
-            continue;
-
-         string psym = PositionGetString(POSITION_SYMBOL);
-         if(!IsOurSymbol(psym))
-            continue;
-
-         string pcmt = PositionGetString(POSITION_COMMENT);
-         if(!IsOurEA(pcmt))
-            continue;
-
-         string live_model = ModelCanonical(pcmt);
-         if(StringLen(live_model) == 0)
-            continue;  // skip unrecognized trades
-
-         if(live_model != mn)
-            continue;
-
-         model_floating += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
-        }
-
-      double mc_live = mc_cum + model_floating;
+      // Per-model net P&L: CLOSED trades only (no floating). Apr 27 user
+      // request — landing-page model cards should show realized stats only,
+      // matching the global equity-only display.
+      double mc_live = mc_cum;
       if(mbk_n > 0)
         {
          mc_eq += ",";

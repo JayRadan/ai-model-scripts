@@ -448,8 +448,12 @@ void SendReport()
 
    double clean_start_bal = balance_now - all_trade_net_window;
    double ea_floating     = floating - manual_floating;
-   // Displayed equity: EA-only trajectory projected from the real window-start balance.
-   double equity_now  = clean_start_bal + sum_net + ea_floating;
+   // Displayed value: BALANCE only (closed trades), no floating P&L. Avoids the
+   // snapshot-vs-real-time mismatch when a position is open with running profit
+   // (Apr 27 audit — user reported $48 gap; root cause was floating P&L).
+   // The trajectory the website plots is closed-only PnL added to the
+   // reconstructed window-start balance.
+   double equity_now  = clean_start_bal + sum_net;
    double start_bal   = clean_start_bal;
 
    double eq[];

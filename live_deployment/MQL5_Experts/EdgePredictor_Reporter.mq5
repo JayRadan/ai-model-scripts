@@ -34,10 +34,12 @@ bool IsOurEA(const string cmt)
   {
    if(StringLen(cmt) < 2)
       return false;
-   // Currently-supported products: Midas v6 + Phantom + Oracle v7
+   // Currently-supported products: Midas v6 + Phantom + Oracle v7 + Janus v7.4
    // (V5- Midas is deprecated; EU-/GJ- products discontinued)
-   if(StringFind(cmt, "V6-") == 0)       return true;   // Midas v6
-   if(StringFind(cmt, "V7-") == 0)       return true;   // Oracle v7
+   if(StringFind(cmt, "V6-")  == 0)      return true;   // Midas v6
+   if(StringFind(cmt, "V7-")  == 0)      return true;   // Oracle v7
+   if(StringFind(cmt, "BTC-") == 0)      return true;   // Oracle BTC
+   if(StringFind(cmt, "JAN-") == 0)      return true;   // Janus v7.4
    if(StringFind(cmt, "EP-DQN-B") >= 0)  return true;   // Phantom
    return false;
   }
@@ -48,9 +50,14 @@ bool IsGoldSymbol(const string sym)
    return (StringFind(sym, "XAU") >= 0 || StringFind(sym, "GOLD") >= 0);
   }
 
+bool IsBtcSymbol(const string sym)
+  {
+   return (StringFind(sym, "BTC") >= 0 || StringFind(sym, "BITCOIN") >= 0);
+  }
+
 bool IsOurSymbol(const string sym)
   {
-   return IsGoldSymbol(sym);
+   return IsGoldSymbol(sym) || IsBtcSymbol(sym);
   }
 
 //+------------------------------------------------------------------+
@@ -59,6 +66,7 @@ bool IsCurrentEP(const string cmt)
    return (StringFind(cmt, "V6-")  == 0 ||
            StringFind(cmt, "V7-")  == 0 ||
            StringFind(cmt, "BTC-") == 0 ||
+           StringFind(cmt, "JAN-") == 0 ||
            StringFind(cmt, "EP-DQN-B") >= 0);
   }
 
@@ -71,6 +79,8 @@ string ModelCanonical(const string cmt)
       return "EdgePredictor Oracle";
    if(StringFind(cmt, "BTC-") == 0)
       return "EdgePredictor BTC";
+   if(StringFind(cmt, "JAN-") == 0)
+      return "EdgePredictor Janus";
    if(StringFind(cmt, "EP-DQN-B") >= 0)
       return "EdgePredictor Phantom";
    return "";
@@ -83,6 +93,7 @@ string ModelColor(const string name)
    if(name == "EdgePredictor Phantom")   return "#a855f7";
    if(name == "EdgePredictor Oracle")    return "#6366f1";
    if(name == "EdgePredictor BTC")       return "#f59e0b";
+   if(name == "EdgePredictor Janus")     return "#06b6d4";
    return "#888888";
   }
 
@@ -534,7 +545,7 @@ void SendReport()
 
    string models_json = "[";
    bool first_m = true;
-   string mnames[] = {"EdgePredictor Midas", "EdgePredictor Phantom", "EdgePredictor Oracle"};
+   string mnames[] = {"EdgePredictor Midas", "EdgePredictor Phantom", "EdgePredictor Oracle", "EdgePredictor BTC", "EdgePredictor Janus"};
    int n_models = ArraySize(mnames);
    for(int mi = 0; mi < n_models; mi++)
      {

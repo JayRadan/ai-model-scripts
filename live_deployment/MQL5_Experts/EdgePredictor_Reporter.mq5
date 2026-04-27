@@ -448,12 +448,13 @@ void SendReport()
 
    double clean_start_bal = balance_now - all_trade_net_window;
    double ea_floating     = floating - manual_floating;
-   // Displayed value: BALANCE only (closed trades), no floating P&L. Avoids the
-   // snapshot-vs-real-time mismatch when a position is open with running profit
-   // (Apr 27 audit — user reported $48 gap; root cause was floating P&L).
-   // The trajectory the website plots is closed-only PnL added to the
-   // reconstructed window-start balance.
-   double equity_now  = clean_start_bal + sum_net;
+   // Displayed value: REAL broker ACCOUNT_BALANCE directly. Apr 27 audit —
+   // the previous reconstructed value (clean_start_bal + sum_net) lost ~$109
+   // vs broker balance because some deals weren't being attributed back into
+   // sum_net even though they affected balance_now. Simpler is better:
+   // ACCOUNT_BALANCE is by definition closed-trade-only (no floating), and
+   // it matches what the user sees in MT5's Trade tab exactly.
+   double equity_now  = balance_now;
    double start_bal   = clean_start_bal;
 
    double eq[];
@@ -803,7 +804,7 @@ void SendReport()
    json += StringFormat("\"total_trades\":%d,", total_trades);
    json += StringFormat("\"win_rate\":%.2f,", win_rate);
    json += StringFormat("\"profit_factor\":%.2f,", profit_factor);
-   json += StringFormat("\"net_profit\":%.2f,", sum_net);
+   json += StringFormat("\"net_profit\":%.2f,", equity_now - start_bal);
    json += StringFormat("\"max_drawdown_pct\":%.2f,", max_dd_pct);
    json += StringFormat("\"recovery_factor\":%.2f,", recovery_factor);
    json += StringFormat("\"profit_trades\":%d,", wins);

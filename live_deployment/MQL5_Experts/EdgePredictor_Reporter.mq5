@@ -740,12 +740,14 @@ void SendReport()
       double entry = PositionGetDouble(POSITION_PRICE_OPEN);
       double bid = SymbolInfoDouble(psym, SYMBOL_BID);
       double pnl = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+      double sl = PositionGetDouble(POSITION_SL);
+      double tp = PositionGetDouble(POSITION_TP);
 
       if(opn > 0)
          open_json += ",";
       open_json += StringFormat(
-         "{\"model\":\"%s\",\"direction\":\"%s\",\"entry\":%.5f,\"current\":%.5f,\"pnl\":%.2f,\"color\":\"%s\"}",
-         mdl, dir, entry, bid, pnl, ModelColor(mdl));
+         "{\"model\":\"%s\",\"direction\":\"%s\",\"entry\":%.5f,\"current\":%.5f,\"pnl\":%.2f,\"sl\":%.5f,\"tp\":%.5f,\"color\":\"%s\"}",
+         mdl, dir, entry, bid, pnl, sl, tp, ModelColor(mdl));
       opn++;
      }
    open_json += "]";

@@ -12,38 +12,57 @@ export to live-deployed EA.
 
 ## 1. Architecture at a glance
 
+**Server-driven (Apr 2026+):** customer EA is a thin client. Every closed
+M5 bar it POSTs the latest bars to a FastAPI service hosted on Render;
+the server runs the pickled `XGBClassifier` objects from validation and
+returns a `Decision`. The EA only places/manages broker orders.
+
 ```
- MT5 exporter ──► swing_v5_<inst>.csv  (M5 OHLC + 21 micro + H1/H4 context + label)
-                                │
-                                ▼
-       ┌────────────────────────────────────────────────┐
-       │ Stage 1: Regime selector (K=5 rolling windows) │  02_build_selector_k5*.py
-       │ Stage 2: Tech features + cluster assignment    │  01_prepare_<inst>.py
-       │ Stage 3: Rule scanner → per-cluster setups     │  04_build_setup_signals*.py
-       │ Stage 4: Physics features (hurst/ou/entropy/.) │  04b_compute_physics_features*.py
-       │ Stage 5: v7.2-lite extras (vpin/har/hawkes)    │  00_compute_v72l_features_step1*.py
-       │ Stage 6: Per-(cluster,rule) XGB + exit + meta  │  01_validate_v72_lite*.py
-       │ Stage 7: Train on full data, export ONNX       │  02_train_and_export_v72l*.py
-       │ Stage 8: Generate MQL5 router + regime mqh     │  04_gen_router_v72l*.py + 08_gen_mql5_selector*.py
-       │ Stage 9: Build EA (SwingScalperEA_*.mq5)       │  live_deployment/MQL5_Experts/
-       │ Stage 10: Upload ONNX to server MongoDB        │  commercial/server/upload_k5_models.py
-       │ Stage 11: Generate website backtest JSON + PNG │  experiments/.../08_gen_backtest_assets*.py
-       └────────────────────────────────────────────────┘
+                     ┌─────────────────────────────────────┐
+ ML training         │    new-model-zigzag (this repo)     │
+ + backtests         │  validate → /tmp/*_pipeline.pkl     │
+                     └────────────────┬────────────────────┘
+                                      │ pickle_validated_models.py
+                                      ▼
+                     ┌─────────────────────────────────────┐
+                     │  commercial/server/decision_engine  │
+                     │  • configs/<product>.py             │
+                     │  • models/<product>_validated.pkl   │
+                     │  • api.py (FastAPI /decide/{prod})  │
+                     │  • decide.py (cascade)              │
+                     │  • funnel_log.py (sqlite trace)     │
+                     └────────────────┬────────────────────┘
+                                      │ git push → Render auto-deploy
+                                      ▼
+                     ┌─────────────────────────────────────┐
+   Customer MT5 ◄─── │   https://edge-predictor.onrender   │
+   EdgePredictor_    │       /decide/{product}             │
+   Connector_v2.ex5  └─────────────────────────────────────┘
 ```
 
-**Three models per instrument:**
-- **Confirm** (29 ONNX, one per cluster×rule): `P(rule win)` — 18 features.
-- **Exit** (1 ONNX): `P(close now is optimal)` — 11 features (unrealized_R, bars_held, velocity + 8 physics).
-- **Meta** (1 ONNX): `P(setup wins | confirm passes)` — 20 features (18 + direction + cid).
-
-**Runtime gates per trade:**
+**Decide cascade per closed bar (per product):**
 ```
-confirm_proba >= rule_threshold  AND  meta_proba >= meta_threshold
+regime classify (K=5 fingerprint)
+   → look up armed (confirm_cid, rule) pairs for live cluster
+   → drop disabled_cohorts (v7.9 hard kills)
+   → fire detector — does any rule trigger on the last bar?
+   → Stage-1: per-rule XGB confirm head → drop if p_conf < threshold
+   → Stage-2 (Oracle/Janus only): meta head → drop if p_win < meta_thr
+   → optional Janus pivot-score upstream cascade
+   → Decision { open / hold / exit, direction, sl_atr_mult, trace }
 ```
 
-**Exit logic:** check ML exit every bar after `MIN_HOLD=2`; hard SL at `4×ATR` safety stop; max hold `60 bars` (5h M5).
+**Three (or four) models per product, all `XGBClassifier` pickles:**
+- **Confirm** (1 per cluster×rule, ~28-30 heads): `P(rule wins)` — 18 features (v7.2-lite) or 14 (Midas v6).
+- **Exit** (1 head): `P(close now is optimal)` — 11 features (`unrealized_R`, `bars_held`, `pnl_velocity` + 8 physics). Threshold 0.55.
+- **Meta** (Oracle XAU/BTC + Janus only — Midas v6 has no meta): `P(setup wins | confirm passes)` — 20 features (18 + direction + cid).
+- **Pivot-score + direction** (Janus only): per-bar pivot detector that runs upstream of the cluster cascade.
 
-**Regime selector:** 7-feature fingerprint on trailing 288 M5 bars (~1 UTC day), scaler → PCA → nearest-centroid → `g_active_cluster`. Refreshed on first tick of each new UTC day (calendar-anchored so all users converge).
+**Exit logic:** ML exit checked every bar after `MIN_HOLD=2`; hard SL at `4×ATR` safety stop; max hold `60 bars` (5h M5).
+
+**Regime selector:** 7-feature fingerprint on trailing 288 M5 bars (~1 UTC day), scaler → PCA → nearest-centroid → cluster id. Refreshed on first tick of each new UTC day (calendar-anchored so all users converge).
+
+**Why pickles, not ONNX.** ONNX round-tripping introduces ~1e-6 numerical drift. Over thousands of bars and a confidence cutoff that drift can flip decisions. Pickles keep the live model bit-identical to the one that produced the holdout result. The `.ex5` file customers download (`EdgePredictor_Connector_v2.ex5`) never changes when we retrain — only the server-side pickle does.
 
 ---
 
@@ -110,24 +129,40 @@ new-model-zigzag/
 │       ├── 08_gen_backtest_assets_btc.py       website JSON + PNG for BTC
 │       └── meta_threshold_v72l_btc.txt         0.5250
 │
-└── live_deployment/                   ← what gets copied to MT5
-    ├── MQL5_Experts/
-    │   ├── SwingScalperEA_v6.mq5        Midas (XAU) — 14-feature base
-    │   ├── SwingScalperEA_v7.mq5        Oracle (XAU) — 18 features + meta
-    │   └── SwingScalperEA_BTC.mq5       BTC Oracle (magic 420805)
-    ├── MQL5_Include/
-    │   ├── regime_selector.mqh           XAU K=5 constants
-    │   ├── regime_selector_btc.mqh       BTC K=5 constants
-    │   ├── confirmation_router_v7.mqh    XAU per-rule loader
-    │   ├── confirmation_router_v7_btc.mqh
-    │   ├── setup_rules.mqh               26 rule detectors (shared)
-    │   └── v7_features.mqh               VPIN/HAR/Hawkes ring-buffer (shared)
-    └── MQL5_Files/                      ONNX staging dir (copied by MT5 on license validate)
+└── live_deployment/                   ← LEGACY (pre-Apr 2026 ONNX path).
+    │                                      Kept for reference only — current
+    │                                      deployment is server-driven; the
+    │                                      customer .ex5 lives in the
+    │                                      commercial repo (see Section 3).
+    ├── MQL5_Experts/SwingScalperEA_*.mq5
+    └── MQL5_Include/{regime_selector,confirmation_router_v7,setup_rules,v7_features}.mqh
 ```
+
+The **current** customer-facing artifact is
+`commercial/server/MQL5_Experts/EdgePredictor_Connector_v2.mq5` (compiled
+to `commercial/website/public/files/EdgePredictor_Connector.ex5`). Same
+.ex5 for every product — product is selected via the EA's `EP_PRODUCT`
+input enum, server-side configs decide everything else.
 
 ---
 
-## 3. Full build — step by step (BTC example)
+## 3. Full build — step by step (current server-driven architecture)
+
+This is the end-to-end path for **(a) retraining an existing product** or
+**(b) shipping a brand-new product**. Steps 1-7 are the same in both cases
+(prepare data → train → backtest). After step 7 the path is much shorter
+than the old ONNX-per-EA model: pickle, vendor, push, Render auto-deploys.
+
+> **Retraining an existing product?** You only need steps 7-10. The data
+> and feature artifacts are already on disk; you're just refreshing the
+> trained weights.
+>
+> **Adding a new product?** All 12 steps. Mirror the directory pattern
+> of an existing product (e.g. `experiments/v72_lite_btc_deploy/` is the
+> reference for "asset N of an Oracle-shape engine").
+>
+> **Detailed cheat-sheet:** `commercial/server/decision_engine/DEPLOY.md`
+> has copy-pasteable commands and a troubleshooting table.
 
 ### Step 1 — Export raw data from MT5
 
@@ -211,107 +246,140 @@ python 01_validate_v72_lite_btc.py
 
 Output: `data/v72l_trades_holdout_btc.csv`, per-cluster WR/PF, auto-selected meta threshold → `meta_threshold_v72l_btc.txt`.
 
-### Step 8 — Production train + ONNX export
+### Step 8 — Pickle the validated XGB bundle
 
 ```bash
-python 02_train_and_export_v72l_btc.py
+cd ~/Desktop/my-agents-and-website/commercial/server
+python3 decision_engine/scripts/pickle_validated_models.py oracle_btc
+# → ~/Desktop/new-model-zigzag/models/oracle_btc_validated.pkl
 ```
-Retrains on **full history** (no holdout reserve — architecture already validated at step 7). Exports:
-- 28-29 `confirm_v7_btc_c{cid}_{rule}.onnx`
-- `exit_v7_btc.onnx`, `meta_v7_btc.onnx`
-- `models/v7_deploy_btc.json` — feature orders, per-rule thresholds, meta threshold
 
-ONNX parity is verified at export time (XGB predict_proba vs ONNX Runtime, target ≤ 1e-6 max abs diff).
+The pickler reads the trained XGB objects that step 7 stashed (Oracle: at
+`/tmp/oracle_deployed_pipeline_cache.pkl`; Midas: at the validate
+script's `_raw.pkl` output) and freezes them into a single bundle
+containing `mdls`, `thrs`, `exit_mdl`, `meta_mdl`, `meta_threshold`,
+`v72l_feats`, `meta_feats`, `exit_feats`, `trained_on`, `git_rev`.
 
-### Step 9 — Generate MQL5 regime + router includes
+For a Midas-shape engine (no meta gate) the script picks the
+`_build_midas_payload` branch automatically; the resulting pickle has
+`meta_mdl = None` and `decide.py` already branches on this.
+
+### Step 9 — Vendor the pickle into the server repo
 
 ```bash
-python 08_gen_mql5_selector_btc.py   # → live_deployment/MQL5_Include/regime_selector_btc.mqh
-python 04_gen_router_v72l_btc.py     # → MT5 Include/confirmation_router_v7_btc.mqh
+cp ~/Desktop/new-model-zigzag/models/oracle_btc_validated.pkl \
+   ~/Desktop/my-agents-and-website/commercial/server/decision_engine/models/
 ```
 
-The router mqh embeds ONNX filenames + thresholds + a `RULE_DISABLED` flag for rules with base PF<1 (marked with threshold 1.01 so they never pass).
+The server loads pickles from this vendored directory at boot. **The
+`new-model-zigzag/models/` copy is the source of truth** (regenerated by
+the pickler); the vendored copy is what gets deployed. Always copy from
+left to right, never edit the vendored copy directly.
 
-### Step 10 — Build/adapt the EA
-
-Copy `SwingScalperEA_v7.mq5` → `SwingScalperEA_BTC.mq5` and rewire:
-- `#include <regime_selector_btc.mqh>` + `<confirmation_router_v7_btc.mqh>`
-- `InpMagic = 420805` (distinct per instrument: v6=420305, v7=420705, BTC=420805)
-- `META_THRESHOLD = 0.525` (from step 7)
-- `exit_v7_btc.onnx`, `meta_v7_btc.onnx` filenames
-- All `ConfirmV7_*` → `ConfirmV7_BTC_*`, `RULE_*_V7` → `RULE_*_V7_BTC`
-- `InpMaxSpread` — **BTC is ~40× wider than XAU**; default `5000` points is sensible
-- Log prefixes: `"v7:"` → `"BTC:"` (verify UpdateDashboard, watermark, init print)
-
-Features built by the EA in `BuildFeatures()` must **exactly match** `feature_order_v72l` in `v7_deploy_btc.json`. Meta appends `direction, cid` (20 total). Exit uses a different 11-feature order starting with `unrealized_pnl_R, bars_held, pnl_velocity`.
-
-### Step 11 — Deploy to MT5
+### Step 10 — Sanity-load + commit + push (Render auto-deploys)
 
 ```bash
-cp live_deployment/MQL5_Experts/SwingScalperEA_BTC.mq5       "<MT5>/MQL5/Experts/"
-cp live_deployment/MQL5_Include/regime_selector_btc.mqh      "<MT5>/MQL5/Include/"
-# confirmation_router_v7_btc.mqh already written there by 04_gen_router
-cp models/confirm_v7_btc_*.onnx models/exit_v7_btc.onnx models/meta_v7_btc.onnx "<MT5>/MQL5/Files/"
-```
-Compile the `.mq5` in MetaEditor (F7). Attach to BTCUSD M5 chart.
+cd ~/Desktop/my-agents-and-website/commercial/server
 
-### Step 12 — Upload ONNX to the license server
+# Sanity check — load the bundle, verify head count + meta threshold
+python3 -c "
+from decision_engine import loader
+from decision_engine.configs import ORACLE_BTC
+b = loader.load_bundle(ORACLE_BTC)
+print('heads=', len(b.payload['mdls']),
+      'meta_thr=', b.payload['meta_threshold'])
+"
+
+cd ~/Desktop/my-agents-and-website/commercial
+git add server/decision_engine/models/oracle_btc_validated.pkl \
+        server/decision_engine/configs/*.py
+git commit -m "Oracle BTC retrain: holdout PF X.XX / WR YY.Y%"
+git push
+```
+
+That's it for an existing-product retrain. **Render auto-deploys in
+~60 s; next closed-bar POST hits the new models.** Verify with:
 
 ```bash
-cd commercial/server
-source venv/bin/activate
-python upload_k5_models.py   # uploads to MongoDB GridFS
+curl https://edge-predictor.onrender.com/decide/_health | jq
 ```
 
-**Also update `server/server.py`** to whitelist the new prefix:
+The customer's `EdgePredictor_Connector_v2.ex5` does **not** change.
+
+---
+
+The remaining steps (11-12) only apply when **adding a new product**, not
+when retraining.
+
+### Step 11 — Wire the product server-side (NEW PRODUCTS ONLY)
+
+**11a. Add a config** in `commercial/server/decision_engine/configs/<slug>.py`
+(copy `oracle_btc.py` as the closest template):
+
 ```python
-is_confirm = (
-    ... or name.startswith("confirm_v7_btc_c") or ...
-)
+@dataclass(frozen=True)
+class OracleEthConfigT:
+    name: str = "oracle_eth"
+    symbol_base: str = "ETHUSD"
+    validated_pkl: str = "oracle_eth_validated.pkl"
+    regime_selector_json: str = "regime_selector_eth_K5.json"
+    v72l_feats: tuple = V72L_FEATS
+    meta_feats: tuple = META_FEATS
+    exit_feats: tuple = EXIT_FEATS
+    exit_threshold: float = 0.55
+    min_hold_bars:  int = 2
+    max_hold_bars:  int = 60
+    sl_hard_atr:    float = 4.0
+    c4_directional_overlay: bool = False    # ship after holdout validates
+    disabled_cohorts: tuple = ()             # populate after v79 forensics
 ```
-Otherwise the EA's license-based model download will return HTTP 400 and abort.
 
-Exit/meta models auto-match existing prefix rules (`exit_v*`, `meta_v*`).
+**11b. Register** in `configs/__init__.py` `REGISTRY` dict.
 
-### Step 13 — Generate website backtest assets
+**11c. Extend** `scripts/pickle_validated_models.py` with the new product's
+`PRODUCTS` entry (`pipeline_dir`, `validate_mod`, `threshold_file`,
+`cache_path`, `out_name`) — pattern matches whichever existing product
+shares its engine shape.
 
+**11d. Wire the EA enum** in
+`commercial/server/MQL5_Experts/EdgePredictor_Connector_v2.mq5`:
+- add slug to `ENUM_EP_PRODUCT`,
+- add to `ProductSlug()`, `DefaultMaxSpreadFor()`, `RulesArmedForCluster()`,
+- pick a magic-number block (Oracle XAU 421000+, BTC 421050+, Midas 421100+,
+  Janus 421150+ — pick the next free range).
+- Recompile in MetaEditor (F7), drop the new `.ex5` into
+  `commercial/website/public/files/EdgePredictor_Connector.ex5` (single
+  `.ex5` for all products).
+
+### Step 12 — Wire the product website-side (NEW PRODUCTS ONLY)
+
+**12a. Generate website backtest assets:**
 ```bash
-python experiments/v72_lite_btc_deploy/08_gen_backtest_assets_btc.py
+python experiments/v72_lite_eth_deploy/08_gen_backtest_assets_eth.py
 ```
-Post-processes `v72l_trades_holdout_btc.csv` + swing data (for ATR→USD conversion) into:
-- `public/btc_backtest.png` — equity curve
-- `public/backtest_data.json` — adds `"btc"` key matching the Midas/Oracle schema
+Produces `public/eth_backtest.png` + appends an `"eth"` key to
+`public/backtest_data.json`. Schema: `regimes[] = {name, color, trades, wr,
+pf, pnl}`, `top_rules[] = {name, pf, trades}` (don't use `win_rate /
+profit_factor / rule` — the page will crash).
 
-**Schema gotcha:** `regimes[]` uses `{name, color, trades, wr, pf, pnl}` and `top_rules[]` uses `{name, pf, trades}`. Don't write `win_rate/profit_factor/rule` — the page will crash.
+**12b. Edit `commercial/website/lib/products.ts`:**
+- add `"eth"` to `type ProductId`,
+- add an `eth` product entry (color, price, description, files, install steps),
+- append to `ALL_PRODUCT_IDS` + `STANDALONE_PRODUCT_IDS`.
 
-### Step 14 — Add product to website
+**12c. Edit `app/download/[token]/page.tsx`** — add `"eth"` to the local
+`PackageId` union + install steps in `PACKAGE_META`.
 
-Edit `commercial/website/lib/products.ts`:
-- Add `"btc"` to `type ProductId`
-- Add a `btc` product entry (color, price, description, files, install steps)
-- Append to `ALL_PRODUCT_IDS` + `STANDALONE_PRODUCT_IDS`
+**12d. Edit `app/api/admin/settings/route.ts` + `app/admin/page.tsx`** —
+add `eth_price` field + input.
 
-Edit `app/download/[token]/page.tsx`:
-- Add `"btc"` to the local `PackageId` union
-- Add install steps in `PACKAGE_META`
-
-Edit `app/api/admin/settings/route.ts` + `app/admin/page.tsx`:
-- Add `btc_price` field + input
-
-Copy `.ex5` to website:
-```bash
-cp "<MT5>/MQL5/Experts/SwingScalperEA_BTC.ex5" commercial/website/public/files/EdgePredictor_BTC.ex5
-```
-(Needs `git add -f` — `.ex5` is in `.gitignore`.)
-
-### Step 15 — Type-check + commit
-
+**12e. Type-check + push:**
 ```bash
 cd commercial/website && npx tsc --noEmit
-cd ../ && git add <changes> && git commit -m "..." && git push origin main
+cd ../ && git add <changes> && git commit -m "Ship Oracle ETH" && git push
 ```
 
-The Render deploy picks up the server whitelist change; Next.js deploy picks up the website.
+Render redeploys server + website. New product is live.
 
 ---
 
@@ -386,26 +454,44 @@ replace them.
 
 ## 5. Critical conventions to preserve
 
-### MQL5 ↔ Python parity
-Static audit checklist (do this before every new-instrument ship):
-1. `feature_order_v72l` (18) in deploy JSON matches EA `BuildFeatures()` index-by-index.
-2. `meta_feature_order` (20) = 18 base + `direction, cid`.
-3. `exit_feature_order` (11) = `unrealized_pnl_R, bars_held, pnl_velocity` + 8 physics in documented order.
-4. `RULE_THRESHOLD_V7_*[]` in router mqh == thresholds from `confirm_models` in deploy JSON.
-5. Regime `REGIME_SCALER_MEAN/STD/PCA/CENTROIDS` in the `.mqh` come from the auto-generator (`08_gen_mql5_selector*.py`) — do **not** hand-edit.
-6. `dow_enc` divisor: `/5` (matches XAU labeler, applied to BTC too by 04b).
+### Server-side feature parity
+Static audit checklist (server-driven architecture — features are
+computed server-side from the bars the Connector EA POSTs):
+1. `cfg.v72l_feats` tuple in `configs/<product>.py` matches the column
+   order the validator's confirm models were trained on (cross-checked
+   at load time against the pickle's `v72l_feats` field).
+2. `cfg.meta_feats` (Oracle/Janus only) = `v72l_feats + ("direction", "cid")`.
+3. `cfg.exit_feats` (11) = `("unrealized_pnl_R", "bars_held", "pnl_velocity",
+   <8 physics features in the documented order>)`.
+4. Per-rule `thrs[(cid, rule)]` thresholds and the regime selector JSON
+   come straight from the pickled bundle — never hand-edit.
+5. `dow_enc` divisor: `/5` (matches XAU labeler, applied to BTC too by 04b).
+6. `disabled_cohorts` (v7.9) — verify after every retrain by re-running
+   `experiments/v79_meta_threshold_sweep/02_loser_forensics.py` against
+   the fresh holdout. Bad cohorts may shift.
 
 ### Calendar-anchored regime refresh
-EAs refresh the active cluster on the **first tick of each new UTC day**, not every N bars from EA start. This ensures all users converge on the same cluster regardless of when they attached the EA. Implemented via `g_last_regime_day = TimeCurrent()/86400` in `OnTick()`.
+The decision engine refreshes the active cluster on the **first decision
+of each new UTC day**, not every N bars. This ensures all users converge
+on the same cluster regardless of when they attached the EA. Implemented
+in `decide.py` using the bar timestamp the EA posts — server doesn't
+care about wallclock.
 
 ### Position recovery across restarts
-`OnInit()` scans `PositionsTotal()` for a position matching the EA's magic+symbol and re-adopts it (`g_entry_price/dir/atr/bars_held`). Required because `g_entry_atr == 0` would silently disable the ML exit after recompile.
+The Connector v2 EA's `OnInit()` calls `ReconcileSlotsWithBroker()` —
+scans `PositionsTotal()` for positions matching the EA's magic block and
+re-adopts each into a slot. Required because slot state lives in the
+EA's `EpSlot[]` array, which a recompile clears.
 
 ### Batched simulate()
 Inside training scripts, `simulate()` **must batch** `predict_proba` — build a `(N_trades × MAX_HOLD, n_feats)` matrix and call once. Unbatched (per-bar) takes hours on the full training set; batched takes seconds.
 
-### ONNX filename prefixes (server whitelist)
-`commercial/server/server.py` explicitly whitelists prefixes: `confirm_c`, `confirm_v6_c`, `confirm_v7_c`, `confirm_v7_btc_c`, `gj_confirm_c`, `eu_confirm_c`. When adding a new instrument, add its prefix here or the license server returns HTTP 400 on download.
+### Pickle, never ONNX (live path)
+The decision engine loads `XGBClassifier` pickles directly. ONNX
+round-tripping introduces ~1e-6 numerical drift that, over thousands of
+bars and a confidence cutoff, can flip decisions. Live numbers must
+match validation numbers bit-for-bit. **Don't reintroduce ONNX as a
+shortcut** — it broke parity twice in 2025.
 
 ### Website JSON schema
 `backtest_data.json` entries (`midas`, `oracle`, `btc`) share the schema in `app/backtest/page.tsx` → `interface ModelData`. `regimes[]` = `{name, color, trades, wr, pf, pnl}`; `top_rules[]` = `{name, pf, trades}`. Rebuilding with different names crashes the tab.
@@ -415,7 +501,31 @@ Inside training scripts, `simulate()` **must batch** `predict_proba` — build a
 ## 6. Quick commands reference
 
 ```bash
-# Fresh build for a new instrument (e.g. ETH):
+# ── Retrain an existing product (e.g. Oracle BTC) ────────────────────
+cd ~/Desktop/new-model-zigzag
+python experiments/v72_lite_btc_deploy/01_validate_v72_lite_btc.py
+
+cd ~/Desktop/my-agents-and-website/commercial/server
+python3 decision_engine/scripts/pickle_validated_models.py oracle_btc
+cp ~/Desktop/new-model-zigzag/models/oracle_btc_validated.pkl \
+   decision_engine/models/
+
+# Sanity load
+python3 -c "from decision_engine import loader; from decision_engine.configs import ORACLE_BTC; \
+            b = loader.load_bundle(ORACLE_BTC); \
+            print('heads=', len(b.payload['mdls']), 'meta=', b.payload['meta_threshold'])"
+
+cd ~/Desktop/my-agents-and-website/commercial
+git add server/decision_engine/ && git commit -m "Oracle BTC retrain" && git push
+# Render auto-deploys in ~60s.
+
+# ── Re-run cohort forensics after retrain (recommended) ──────────────
+cd ~/Desktop/new-model-zigzag
+python experiments/v79_meta_threshold_sweep/02_loser_forensics.py
+python experiments/v79_meta_threshold_sweep/03_walk_forward.py
+# If bad cohorts changed, update disabled_cohorts in the product config.
+
+# ── Fresh build for a new instrument ─────────────────────────────────
 iconv -f UTF-16 -t UTF-8 "<MT5>/.../swing_eth_5min.csv" > data/swing_v5_eth.csv
 
 # Duplicate the BTC pipeline folder, s/btc/eth/, then run:
@@ -425,25 +535,14 @@ python 01_prepare_eth.py
 python 04_build_setup_signals_eth.py
 python 04b_compute_physics_features_eth.py
 python 00_compute_v72l_features_step1_eth.py
-python 01_validate_v72_lite_eth.py          # ← read auto-selected threshold
-python 02_train_and_export_v72l_eth.py
-python 08_gen_mql5_selector_eth.py
-python 04_gen_router_v72l_eth.py
-python 08_gen_backtest_assets_eth.py
+python 01_validate_v72_lite_eth.py
+# Then steps 8-12 of Section 3 (config + pickle + EA enum + website).
 
-# Deploy
-cp live_deployment/MQL5_Experts/SwingScalperEA_ETH.mq5      "<MT5>/MQL5/Experts/"
-cp live_deployment/MQL5_Include/regime_selector_eth.mqh     "<MT5>/MQL5/Include/"
-cp models/confirm_v7_eth_*.onnx models/exit_v7_eth.onnx models/meta_v7_eth.onnx "<MT5>/MQL5/Files/"
-
-# Server
-cd commercial/server && python upload_k5_models.py
-# Edit server.py: add 'confirm_v7_eth_c' to is_confirm whitelist
-
-# Website
-# Edit lib/products.ts + app/download/[token]/page.tsx + admin settings
-cp "<MT5>/.../SwingScalperEA_ETH.ex5" commercial/website/public/files/EdgePredictor_ETH.ex5
-git add -f <files> && git commit && git push
+# ── Live ops ─────────────────────────────────────────────────────────
+curl https://edge-predictor.onrender.com/decide/_health | jq
+# Force-flush server caches (e.g. stuck regime):
+curl -X POST https://edge-predictor.onrender.com/decide/_flush-cache \
+     -H "x-admin-secret: $ADMIN_SECRET"
 ```
 
 ---
@@ -451,13 +550,13 @@ git add -f <files> && git commit && git push
 ## 7. Things agents commonly get wrong
 
 1. **Skipping step 1 (UTF-16 transcode)** → pandas reads garbage headers.
-2. **Hand-writing the regime mqh** → use `08_gen_mql5_selector*.py`; hand-written centroids drift.
-3. **Forgetting to batch `simulate()`** → training hangs for hours.
-4. **Wrong schema in `backtest_data.json`** → BTC tab crashed exactly this way; use `wr/pf/name` not `win_rate/profit_factor/rule`.
-5. **Copying XAU EA and forgetting `InpMaxSpread`** → BTC spreads are 40× wider; default 80 blocks every trade.
-6. **Forgetting `Midas` / `v7` strings in log prints and dashboards** → user-facing inconsistency.
-7. **Not updating `server.py` whitelist** → HTTP 400, EA aborts at init despite models being uploaded.
-8. **Modifying `InpVerbose` default expecting it to update already-attached EAs** → MT5 preserves old input values across recompile; user must re-attach the EA fresh or change in the Inputs panel.
+2. **Forgetting to batch `simulate()`** → training hangs for hours.
+3. **Editing the vendored pickle in `commercial/server/decision_engine/models/` directly** → it gets overwritten by the next pickler run. Always regenerate via `pickle_validated_models.py`.
+4. **Reintroducing ONNX in the live path** → 1e-6 numerical drift flips decisions over thousands of bars. The decision engine loads `XGBClassifier` pickles for a reason.
+5. **Wrong schema in `backtest_data.json`** → BTC tab crashed exactly this way; use `wr/pf/name` not `win_rate/profit_factor/rule`.
+6. **Forgetting to register a new product in `configs/__init__.py`'s `REGISTRY`** → server returns HTTP 404 `unknown product`.
+7. **Adding a new product without copying the new `.ex5` to `commercial/website/public/files/`** → customers download the old binary (single `.ex5` for all products; the `EP_PRODUCT` enum in the EA selects which slug it talks to).
+8. **Modifying EA inputs and expecting already-attached charts to pick them up** → MT5 preserves old input values across recompile. User must re-attach fresh or change in the Inputs panel.
 
 ---
 
@@ -465,27 +564,43 @@ git add -f <files> && git commit && git push
 
 | I need to know... | Look at |
 |---|---|
-| How an EA decides direction | `SwingScalperEA_v7.mq5` → `ScanAndConfirm()` + `setup_rules.mqh` |
-| Which rules belong to which cluster | `setup_rules.mqh` → `RULE_CLUSTER[]` array |
+| How the server decides per bar | `commercial/server/decision_engine/decide.py` → `decide_entry()` cascade |
+| How rules are detected from bars | `commercial/server/decision_engine/rules.py` (`RULE_FNS` dispatcher) + `experiments/.../setup_signals.py` |
+| Which rules belong to which cluster | The pickled `mdls` dict (`(cid, rule)` keys) — load via `loader.load_bundle()` |
 | ML exit formula | `experiments/v72_lite_*/01_validate_v72_lite*.py` → `train_exit()` (peak-from-here target) |
-| Current per-rule thresholds | `models/v7_deploy_<inst>.json` → `confirm_models[<rule>].threshold` |
+| Current per-rule thresholds | `payload['thrs']` in the pickle (`models/<product>_validated.pkl`) |
+| Per-product runtime config | `commercial/server/decision_engine/configs/<product>.py` |
 | Holdout trade log | `data/v72l_trades_holdout_<inst>.csv` |
-| What changed in the last model rev | `git log models/v7_deploy_<inst>.json` + the commit message |
-| MT5 Experts log location | `~/.mt5/drive_c/Program Files/MetaTrader 5/MQL5/Logs/` |
-| License server endpoint | `commercial/server/server.py` → `/license` + `/model` routes |
-| How to ship a retrained model to prod | `commercial/server/decision_engine/DEPLOY.md` |
+| What changed in the last model rev | `git log -- server/decision_engine/models/<product>_validated.pkl` |
+| Server live state / health | `curl https://edge-predictor.onrender.com/decide/_health \| jq` |
+| Decision funnel (per-bar trace) | Admin panel → Decision Funnel, or `/decide/_log-stats?product=…` |
+| Connector EA source | `commercial/server/MQL5_Experts/EdgePredictor_Connector_v2.mq5` |
+| Customer-facing .ex5 | `commercial/website/public/files/EdgePredictor_Connector.ex5` |
+| Detailed retrain/new-product cheat-sheet | `commercial/server/decision_engine/DEPLOY.md` |
 | Sample rows of every training CSV | `data/samples/README.md` |
 
 ---
 
-## 9. Shipping a retrained model
+## 9. Shipping a retrained model — TL;DR
 
-**Note:** since April 2026, live inference runs on the FastAPI "decision
-engine" (the `/decide/{product}` endpoint on Render), *not* from ONNX
-files on the customer's MT5. The EA is a thin client that POSTs bars.
+Full steps are in [Section 3 Steps 7-10](#step-7--honest-holdout-validation)
+above; here's the 30-second version:
 
-That means retraining is no longer "regen ONNX → upload to license
-server → user downloads" — it is "regen pickled XGB bundle → push to
-server repo → Render auto-deploy → all customers live on the new
-models in ~60 s". Full steps:
+```bash
+# 1. Validate (in zigzag repo) — produces /tmp/<product>_pipeline_cache.pkl
+python experiments/v72_lite_<inst>_deploy/01_validate_v72_lite_<inst>.py
+
+# 2. Pickle (in commercial repo)
+cd ~/Desktop/my-agents-and-website/commercial/server
+python3 decision_engine/scripts/pickle_validated_models.py <product>
+
+# 3. Vendor + commit + push (Render auto-deploys in ~60s)
+cp ~/Desktop/new-model-zigzag/models/<product>_validated.pkl decision_engine/models/
+cd .. && git add server/decision_engine/ && git commit -m "<product> retrain" && git push
+```
+
+No customer action required. Their `.ex5` doesn't change. Old models
+roll back via `git revert` of the pickle commit + push.
+
+**Detailed cheat-sheet** with troubleshooting:
 `commercial/server/decision_engine/DEPLOY.md`.

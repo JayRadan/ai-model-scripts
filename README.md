@@ -331,6 +331,57 @@ path and is retained only for historical reference.
 
 All at `0.01 lot`, clean holdout. Gold PnL absolute is smaller because XAU at 0.01 = $0.01/dollar-move vs BTC at 0.01 = $0.01/dollar-move but BTC ATR is ~10× larger in dollars.
 
+### v7.9 cohort kill — May 2026 (deployed)
+
+Forensic on each product's holdout per `(cluster_id, rule)` cohort
+identified specific (cid, rule) pairs with statistically-significant
+low WR that the global meta gate could not filter — meta is a single
+classifier that smooths cohort-level signal away. Walk-forward H1→H2
+of holdout (out-of-sample for the rule) confirmed the kills generalize:
+
+| Product | Killed | ΔWR | ΔPF | ΔR |
+|---|---|---:|---:|---:|
+| Oracle XAU | C2_R0e_nr4_break | +0.6pp | +0.20 | ~0 |
+| Midas XAU  | C1_R0c_doubletouch, C2_R0d_squeeze, C2_R0e_nr4_break, C2_R0h_3bar_reversal | +5.2pp | +0.85 | -3.3% |
+| Oracle BTC | C2_R0h_3bar_reversal | +9.0pp | +1.81 | ~0 |
+| Janus XAU  | (no kill — single-rule cascade has no clean cohort candidate) | — | — | — |
+
+Implementation: `disabled_cohorts: tuple = ((cid, rule), ...)` field on
+each ProductConfig (`commercial/server/decision_engine/configs/*.py`);
+`decide._armed_pairs_for()` strips disabled pairs as the final step so it
+applies equally to native and overlay-borrowed rules. Hard rule, no retrain.
+Re-run forensics after every product retrain — cohorts may shift.
+
+Forensic + walk-forward scripts:
+`experiments/v79_meta_threshold_sweep/{02_loser_forensics,03_walk_forward}.py`
+
+### What was tested and didn't ship (May 2026)
+
+For agents picking up this project: the following have been rigorously
+disproven on the validated holdout. Don't propose them again without a
+genuinely new input source.
+
+- **v75 K-means / HMM regime overlays** on XAU-only fingerprints —
+  no PF separation across clusters
+- **v75 daily-veto** from XAU daily features — every threshold
+  net-removes profit
+- **v76 kNN analog** 24h-shape matching — corr(signal, pnl) ≈ 0
+- **v77 daily cross-instrument** (DXY/SPX/TNX/VIX) — top-quintile
+  on Oracle p=0.001 (real signal in tail) but ΔR negative
+- **v77b intraday cross-instrument** (1h) — in-sample +0.28 →
+  holdout **-0.04** (sign flipped, macro relationships drift in
+  ~6 months)
+- **v78 magnitude prediction → variance-based sizing** — first
+  positive cross-product transfer (spearman +0.10/+0.08) but
+  modest (+3% R Midas, p=0.024). Not yet shipped pending a clean
+  per-product variance head and `lot_mult` wire-in.
+
+The takeaway from 6 experiments: **trained confirm heads + meta gate
+already saturate directional signal at M5**. Residual is mostly noise.
+Real wins came from (a) cohort kills (v79) and (b) different prediction
+target like magnitude (v78) — both compound with existing models, not
+replace them.
+
 ---
 
 ## 5. Critical conventions to preserve

@@ -1,7 +1,0 @@
-data/*.csv
-models/*.json
-models/*.onnx
-models/*.pkl
-reports/*.png
-reports/*.csv
-__pycache__/

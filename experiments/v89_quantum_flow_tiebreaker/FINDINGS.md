@@ -113,12 +113,36 @@ This is the 7th "direction filter" we've tested across v75/v76/v77/v77b/
 v85/v8.7/v8.9 — all fail the same way. The pattern is unambiguous:
 **per-trade direction filtering is not a viable axis on M5 with our feature set.**
 
+## Follow-up: 5m-only filter (better than 4h)
+
+Tested same agreement filter using only 5m flow (not 4h MTF):
+
+```
+                  baseline                       with 5m flow agree
+Oracle XAU      WR 65.3% PF 3.48 R+3817   →   WR 66.5% PF 3.71 R+2244 (-41%R, +0.23 PF)
+Midas XAU       WR 57.4% PF 2.24 R+5093   →   WR 59.5% PF 2.64 R+3155 (-38%R, +0.41 PF)
+Oracle BTC      WR 54.9% PF 1.84 R+3298   →   WR 57.5% PF 2.59 R+1214 (-63%R, +0.75 PF)
+```
+
+**5m filter beats 4h on every product** (4h: PF -0.06/+0.19/-0.07; 5m: +0.23/+0.41/+0.75).
+
+But same R-trading-down trade-off:
+- Drops 44-77% of trades
+- Loses 38-63% of total R
+- Skipped trades are themselves profitable (+1574/+1938/+2083 R)
+
+Not what Jay originally wanted (same R + higher WR). Different axis: smoother
+equity curve at cost of total profit. Most interesting on BTC: PF crosses 2.0
+(1.84 → 2.59). Oracle/Midas not worth the R cost. Flagged as opt-in candidate
+for BTC if Jay wants smoother equity over max profit.
+
 ## Files retained
 
 - `01_port_and_test.py` — Pine→Python port + live-window replay
-- `02_holdout_backtest.py` — full-holdout filter validation
+- `02_holdout_backtest.py` — 4h-flow filter holdout backtest
+- `03_holdout_5m_only.py` — 5m-flow filter holdout backtest
 - `trades_with_flow.csv` — live window
-- `holdout_oracle_xau.csv`, `holdout_midas_xau.csv`, `holdout_oracle_btc.csv`
+- `holdout_*.csv` — full-holdout per-trade flow values + agreement flags
 - This memo
 
 ## Files retained

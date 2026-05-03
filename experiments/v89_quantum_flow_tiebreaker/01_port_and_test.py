@@ -69,9 +69,11 @@ def quantum_flow(df: pd.DataFrame, lookback: int = 21,
 def quantum_flow_mtf(df_m5: pd.DataFrame, htf: str = "4h") -> pd.Series:
     """Compute flow on htf-resampled bars, forward-fill to M5 grid."""
     df = df_m5.set_index("time")
-    df_htf = df[["open", "high", "low", "close", "spread"]].resample(htf).agg(
-        {"open":"first","high":"max","low":"min","close":"last","spread":"sum"}
-    ).dropna()
+    # Use volume if available (Dukascopy/MT5 with tick_volume); else spread
+    vcol = "volume" if "volume" in df.columns else "spread"
+    cols = ["open", "high", "low", "close", vcol]
+    agg = {"open":"first","high":"max","low":"min","close":"last", vcol:"sum"}
+    df_htf = df[cols].resample(htf).agg(agg).dropna()
     df_htf = df_htf.reset_index()
     flow_htf = quantum_flow(df_htf)
     # Forward-fill to M5 grid using shift(1) to avoid lookahead

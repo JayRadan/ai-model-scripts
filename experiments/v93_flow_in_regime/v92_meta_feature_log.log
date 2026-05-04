@@ -1,0 +1,46 @@
+loading swing + computing flow_5m on full Dukascopy bars...
+  swing bars=590,688 flow med=1.01
+loading setups + merging flow...
+train: 58,145  test: 15,133
+
+[1] Training confirm heads (with flow_5m as 19th feat)...
+  v72l-conf+flow: 28 active, 2 disabled
+  conf train 4s
+  14,130 confirmed train setups
+
+[2] Loading swing+physics for exit/sim...
+  Loading swing + physics...
+  exit train 57s
+
+[3] Sim train trades for meta labels...
+  simulated 14,130 train trades in 7s
+  meta-validation baseline: n=2826 WR=61.0% PF=2.75
+  selected meta threshold: 0.675
+  flow_5m importance in meta: 0.0490  (rank 6/21)
+
+[4] Holdout backtest...
+  v72l+flow confirmed in holdout: 2,313
+
+  v72l+flow NO meta: n=2313  WR=57.1%  PF=2.32  Expect=+2.033R  Total=+4702.7R  MaxDD=-85.0R
+    C0: n=851 WR=68.6% PF=4.23 R=+3066.8
+    C1: n=132 WR=42.4% PF=0.75 R=-72.9
+    C2: n=478 WR=44.6% PF=1.04 R=+41.9
+    C3: n=582 WR=61.2% PF=3.39 R=+1720.4
+    C4: n=270 WR=41.1% PF=0.91 R=-53.5
+  After meta filter: 1,268  (dropped 1,045)
+
+  v72l+flow + META: n=1268  WR=62.9%  PF=3.25  Expect=+2.773R  Total=+3516.2R  MaxDD=-77.1R
+    C0: n=599 WR=69.4% PF=4.51 R=+2165.9
+    C1: n=45 WR=40.0% PF=0.56 R=-39.5
+    C2: n=65 WR=43.1% PF=1.12 R=+14.2
+    C3: n=417 WR=66.7% PF=4.37 R=+1411.5
+    C4: n=142 WR=40.8% PF=0.89 R=-35.8
+
+==============================================================================
+WITH flow_5m feature:  n=1268  WR=62.9%  PF=3.25  DD=-77.1  R=+3516
+WITHOUT (just done):   n=1010   WR=65.1%  PF=3.61  DD=-47.8  R=+3052
+vs Eightcap (real V):  n=1619   WR=67.4%  PF=3.89  DD=-75    R=+5218
+vs current production: n=1367   WR=65.3%  PF=3.48  DD=-67    R=+3817
+==============================================================================
+
+Total elapsed: 126s

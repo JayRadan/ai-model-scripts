@@ -1,12 +1,88 @@
-# EdgePredictor — v7.2-lite Trading Model Pipeline
+# EdgePredictor — v9.3 Trading Model Pipeline
 
 Regime-aware, rule-based scalping with two-stage ML filtering and ML-driven
-exits. Currently deployed on **XAUUSD** (Oracle, Apr 2026) and **BTCUSD**
-(BTC, Apr 2026). Same architecture, separate training per instrument.
+exits. **4 products live as of May 2026**: Oracle XAU, Midas XAU, Janus XAU,
+Oracle BTC.
 
-This README is the canonical onboarding doc for any agent/developer picking
-up the project. It documents the end-to-end pipeline from raw MT5 CSV
-export to live-deployed EA.
+This README is the canonical onboarding doc. It documents the end-to-end
+pipeline from raw MT5 CSV export to live-deployed EA.
+
+> **NEW:** see [`RETRAIN.md`](RETRAIN.md) for step-by-step retrain commands
+> per product. See `## Current state (v9.3, May 2026)` below for what's
+> actually deployed today.
+
+---
+
+## Current state (v9.3, May 2026) — read this first
+
+### What's deployed
+
+| Product | Symbol | Architecture | Holdout PF (live) |
+|---|---|---|---|
+| Oracle XAU | XAUUSD | v7.2-lite + flow regime + meta gate | ~3.70 |
+| Midas XAU | XAUUSD | v6 (14 feat) + flow regime, no meta | ~2.92 |
+| Janus XAU | XAUUSD | v7.4 pivot-score + flow regime | ~2.78 |
+| Oracle BTC | BTCUSD | v7.2-lite + flow regime + meta gate (BTC selector) | ~2.98 |
+
+### Architecture changes in v9.3 (May 3 2026 deploy)
+
+1. **K=5 regime classifier now uses 8 features** (was 7). 8th feature is
+   `flow_4h_mean` — the mean of the Quantum Volume-Flow Quantizer (Pine
+   indicator, ported in `experiments/v89_quantum_flow_tiebreaker/`)
+   computed on 4h-resampled bars over the 288-bar window.
+2. **All training data switched to Dukascopy** (single source of truth for
+   real `tick_volume`, since broker CSVs were exporting `spread` masquerading
+   as volume — broke the volume-dependent flow indicator).
+3. **Path A live**: server fetches its own Dukascopy bars per /decide call,
+   ignoring whatever bars the customer EA sends. Means every customer on
+   every broker gets the **identical** decision for the same closed bar.
+   Source: `commercial/server/decision_engine/dukascopy_source.py`.
+   Activate via `USE_DUKASCOPY_BARS=1` env var on Render.
+
+### Critical pinned params (do not change without testing)
+
+```
+MIN_DATE = "2016-01-01"          # XAU & Midas selectors. NOT 2020.
+MIN_DATE = "2018-01-01"          # BTC selector
+random_state = 42                # KMeans + every XGBClassifier
+WINDOW = 288, STEP = 288         # regime fingerprint window
+K = 5                             # number of regime clusters
+Cutoff = "2024-12-12"             # train/test holdout split
+```
+
+### File map for v9.3
+
+| Role | File |
+|---|---|
+| XAU regime selector builder | `experiments/v93_flow_in_regime/01_selector_with_flow_feature.py` |
+| BTC regime selector builder | `experiments/v93_flow_in_regime/02_selector_btc_with_flow.py` |
+| Quantum Flow port (Pine→Python) | `experiments/v89_quantum_flow_tiebreaker/01_port_and_test.py` |
+| XAU regime selector (live) | `data/regime_selector_K4.json` |
+| BTC regime selector (live) | `data/regime_selector_btc_K5.json` |
+| Server-side regime classifier | `commercial/server/decision_engine/regime.py` (Quantum Flow inlined) |
+| Server-side Dukascopy fetcher | `commercial/server/decision_engine/dukascopy_source.py` |
+| Step-by-step retrain commands | `RETRAIN.md` |
+
+### Known caveats from May 2026 deploy events
+
+1. **The original v9.3 winner script was edited 4 minutes after winning and
+   not committed to git.** Result: we measured PF 4.17 last night but
+   today's reproducible rebuild gives PF ~3.40. The `MIN_DATE=2020 → 2016`
+   revert recovered most of the gap; remaining 0.77 PF is currently
+   unrecoverable. Current scripts in repo produce the verifiable PF 3.40
+   number.
+2. **The deployed Oracle XAU pkl has `meta_threshold=0.55` with 29 confirm
+   heads**, while a fresh retrain produces `meta_threshold=0.675` with 28
+   heads. The deployed version performs *better* on holdout (PF 3.70 vs
+   3.40) — we don't fully know why. **Don't overwrite the deployed pkl
+   without comparing first.**
+3. **Junk-file bug** — `04b_compute_physics_features.py` and
+   `00_compute_v72l_features_step1.py` previously globbed their own
+   outputs and created recursive `setups_0_v6_v6.csv` style junk. Both
+   patched on May 4 to filter to canonical files. If junk reappears,
+   delete with: `rm data/setups_*_v6_v6*.csv data/setups_*_v72l_v6*.csv`.
+
+---
 
 ---
 

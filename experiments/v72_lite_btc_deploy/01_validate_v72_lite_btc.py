@@ -40,7 +40,7 @@ EXIT_THRESHOLD = 0.55; MAX_FWD_EXIT = 60
 def load_swing_with_physics():
     print("  Loading swing + physics...", flush=True)
     swing = pd.read_csv(P.data("swing_v5_btc.csv"), parse_dates=["time"])
-    swing = swing.sort_values("time").reset_index(drop=True)
+    swing = swing.drop_duplicates(subset="time", keep="first").sort_values("time").reset_index(drop=True)
     H = swing["high"].values.astype(np.float64)
     L = swing["low"].values.astype(np.float64)
     C = swing["close"].values.astype(np.float64)

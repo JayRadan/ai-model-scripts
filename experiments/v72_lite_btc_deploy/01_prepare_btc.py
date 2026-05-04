@@ -77,7 +77,7 @@ def add_tech_features(df):
     return df
 
 
-def compute_fp(c, h, l, o):
+def compute_fp(c, h, l, o, flow=None):
     if len(c) < 10: return None
     returns = np.diff(c) / c[:-1]; bar_ranges = (h - l) / c
     fp = {}
@@ -95,6 +95,9 @@ def compute_fp(c, h, l, o):
         fp["return_autocorr"] = float(np.corrcoef(r1, r2)[0, 1]) if denom > 1e-12 else 0.0
     else:
         fp["return_autocorr"] = 0.0
+    if flow is not None:
+        fc = flow[~np.isnan(flow)]
+        fp["flow_4h_mean"] = float(fc.mean()) if len(fc) else 0.0
     return fp
 
 
@@ -117,6 +120,18 @@ def main():
     pca_mean    = np.array(sel["pca_mean"]);    pca_comp   = np.array(sel["pca_components"])
     centroids   = np.array(sel["centroids"]);   feat_names = sel["feat_names"]
 
+    _FLOW_4H = None
+    if "flow_4h_mean" in feat_names:
+        import sys
+        sys.path.insert(0, "/home/jay/Desktop/new-model-zigzag/experiments/v89_quantum_flow_tiebreaker")
+        from importlib.machinery import SourceFileLoader
+        qf = SourceFileLoader("qf01",
+            "/home/jay/Desktop/new-model-zigzag/experiments/v89_quantum_flow_tiebreaker/01_port_and_test.py"
+        ).load_module()
+        rf = df.rename(columns={"tick_volume": "volume"}) if "tick_volume" in df.columns else df
+        _FLOW_4H = qf.quantum_flow_mtf(rf[["time","open","high","low","close","volume"]]).values
+        print(f"  computed flow_4h on {len(_FLOW_4H):,} bars")
+
     closes, highs, lows, opens = (df["close"].values.astype(np.float64),
                                    df["high"].values.astype(np.float64),
                                    df["low"].values.astype(np.float64),
@@ -124,7 +139,8 @@ def main():
     bar_cluster = np.full(len(df), -1, dtype=int)
     for start in range(0, len(df) - WINDOW, STEP):
         end = start + WINDOW
-        fp = compute_fp(closes[start:end], highs[start:end], lows[start:end], opens[start:end])
+        fp = compute_fp(closes[start:end], highs[start:end], lows[start:end], opens[start:end],
+                         flow=_FLOW_4H[start:end] if _FLOW_4H is not None else None)
         if fp is None: continue
         vec = np.array([fp[k] for k in feat_names])
         scaled  = (vec - scaler_mean) / scaler_std

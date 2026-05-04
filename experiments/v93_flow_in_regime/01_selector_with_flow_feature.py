@@ -24,7 +24,7 @@ DATA = ROOT + "/data"
 WINDOW = 288
 STEP = 288
 K = 5
-MIN_DATE = "2020-01-01"
+MIN_DATE = "2016-01-01"
 
 
 print(f"Loading swing data...", flush=True)

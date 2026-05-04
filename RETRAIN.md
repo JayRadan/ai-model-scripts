@@ -25,6 +25,51 @@ data/labeled_v4.csv           — XAU bars labeled by 01_labeler_v4.py (ATR-base
 was lost because we edited the script 4 minutes after the winning run without
 git-tracking the original version. We can reproduce PF ~3.40 now, not PF 4.17.
 
+## Reproducible target after May 4 forensic dig
+
+The pipeline in this repo is **deterministic** and reproduces:
+
+```
+Oracle XAU: PF 3.40, WR 63.7%, n=1602, DD -62R   (verified twice on May 4)
+Midas XAU:  PF 2.96, WR 61.1%, n=2583, DD -90R
+Janus XAU:  PF 2.66, WR 57.8%, n=6652, DD -307R
+Oracle BTC: PF 2.98, WR 60.9%, n=2092, DD -78R
+```
+
+The currently DEPLOYED pkls (May 3 23:55) perform somewhat differently:
+- Oracle XAU deployed: PF 3.70 (better than retrain — happy accident)
+- Midas XAU deployed:  PF 2.92 (~equal to retrain)
+- Oracle BTC deployed: PF 2.98 (identical to retrain — same selector seed)
+- Janus XAU deployed:  PF 2.78 (slightly better than retrain)
+
+**Production was NOT touched on May 4** because deployed pkls match or beat
+fresh retrain. New retrain only when training data refreshes substantially.
+
+## What we tried but couldn't recover (PF 4.17)
+
+The May 3 v9.3 winner produced PF 4.17 with n=1402 trades. Today's
+pipeline produces PF 3.40 with n=1602 trades — using IDENTICAL selector
+centroids (verified to 4 decimals against FINDINGS.md flow values).
+
+Tested hypotheses for the lost 0.77 PF:
+- ❌ MIN_DATE in selector (tried 2016, 2018, 2020 — same result)
+- ❌ Random state (locked at 42)
+- ❌ Selector script (centroids match yesterday's exactly)
+- ❌ Cluster split logic (script in git is unchanged)
+- ❌ Junk-file pollution (cleaned, didn't change result)
+
+Possible unrecoverable causes:
+- Some intermediate file (cluster_per_bar mapping) had subtle differences
+- Floating-point non-determinism somewhere in physics features
+- The selector script edited at 21:45 had something not in current version
+
+The 16% gap in confirmed train setups (14,010 winner vs 16,272 today)
+suggests per-rule training data differed — but we cannot trace why
+when selector and cluster scripts produce identical centroids.
+
+**Conclusion:** PF 3.40 is the reproducible target. PF 4.17 was a
+moment-in-time result that depended on lost intermediate state.
+
 ---
 
 ## Oracle XAU (v7.2-lite, K=5 K-means + flow_4h_mean)

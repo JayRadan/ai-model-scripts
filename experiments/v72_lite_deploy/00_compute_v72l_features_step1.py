@@ -146,7 +146,13 @@ def main():
     feat_df = feat_df.fillna(0)
 
     # Merge onto v6 setup CSVs → setups_{cid}_v72l.csv
+    # Filter to canonical setups_{N}_v6.csv only (skip junk variants like
+    # setups_0_v6_v6.csv, setups_0_btc_v6.csv, setups_0_v72l_v6.csv).
+    import re
     for f in sorted(glob.glob(P.data("setups_*_v6.csv"))):
+        base = os.path.basename(f).replace(".csv","")
+        if not re.fullmatch(r"setups_\d+_v6", base):
+            continue
         cid = os.path.basename(f).split("_")[1]
         setup = pd.read_csv(f, parse_dates=["time"])
         merged = setup.merge(feat_df, on="time", how="left")

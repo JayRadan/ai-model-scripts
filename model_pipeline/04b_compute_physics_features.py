@@ -192,9 +192,15 @@ def main():
     physics = df[["time"] + V6_FEAT_COLS].copy()
     physics = physics.fillna(0)
 
-    # Merge into each setup CSV
+    # Merge into each setup CSV. Filter out previously-processed variants
+    # (setups_0_v6.csv, setups_0_v72l.csv, setups_0_btc.csv, ...) — accept
+    # only the clean per-cluster files setups_{0..K-1}.csv. Without this,
+    # the loop globs its own output and writes recursive _v6_v6.csv junk.
+    import re
     for f in sorted(glob.glob(P.data("setups_*.csv"))):
         cid = os.path.basename(f).replace("setups_","").replace(".csv","")
+        if not re.fullmatch(r"\d+", cid):
+            continue
         setup = pd.read_csv(f, parse_dates=["time"])
         merged = setup.merge(physics, on="time", how="left", suffixes=("","_v6"))
         for col in V6_FEAT_COLS:

@@ -1,210 +1,209 @@
-# Oracle XAU — flagship two-stage XAUUSD model
+# Oracle XAU — Flagship RL-Enhanced XAUUSD Model
 
-The premium product. Per-cluster rule scanner + per-rule confirmation heads
-(28 active rules) + meta-labeling gate → cleanest signals, highest PF, the
-strictest filtering of the four products.
+> **Version:** v84 (RL Entry) | **Holdout PF:** 4.21 | **WR:** 70.2% | **Trades:** 1,207  
+> **Bundle:** `oracle_xau_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06
 
-## At a glance
+The premium-tier product. Uses 5 RL Q-functions (one per regime) to select
+entries, replacing the 28-rule hand-coded catalog. Two-stage confirmation:
+per-regime confirm head → meta-labeling gate.
 
-| | Value |
-|---|---|
-| Asset | XAUUSD M5 |
-| Architecture | v7.2-lite (18 v72l features) + per-cluster confirm + meta gate |
-| Regime detector | K=5 K-means + v9.4 highvol_only relabel (±0.3%/24h) — **v83c: 4h-step** |
-| Trained on | Dukascopy 2018-01-02 → 2024-12-12 |
-| Holdout window | 2024-12-12 → 2026-05-01 |
-| **Holdout PF (v7.2)** | **3.45** |
-| **Holdout PF (v83c)** | **4.18** (+0.73) |
-| **Holdout WR (v83c)** | **69.1%** (was 65.9%) |
-| **Holdout n (v83c)** | **1,487** (was 1,903) |
-| Meta threshold | **0.775** |
-| Deployed pkl | `commercial/.../models/oracle_xau_validated.pkl` |
-| Deploy commit | `bd411c8` (v83c — 4h regime + range filter + kill-switch) |
+---
+
+## Performance History
+
+| Version | Entry Type | PF | WR | Trades | Key Change |
+|---|---|---|---|---|---|
+| v7.2 | Rule-based (28 rules) | 3.45 | 65.9% | 1,903 | Baseline Oracle |
+| v83c | Rule-based + filters | 4.18 | 69.1% | 1,487 | 4h regime + range filter + kill-switch |
+| **v84** | **RL Q-functions** | **4.21** | **70.2%** | **1,207** | **Q-learning replaces rules** |
+
+### v84 Holdout by Regime (2024-12-12 → 2026-05-01)
+
+| Regime | Trades | WR | PF | Total R |
+|---|---|---|---|---|
+| C0 Uptrend | 388 | 76.5% | **5.43** | +1,724 |
+| C1 MeanRevert | 168 | 56.5% | 1.62 | +104 |
+| C2 TrendRange | 161 | 52.8% | 1.35 | +57 |
+| C3 Downtrend | 387 | 75.7% | **5.98** | +1,886 |
+| C4 HighVol | 103 | 63.1% | 3.55 | +321 |
+
+C0 + C3 carry 64% of trades and ~85% of total profit.
+
+---
 
 ## Architecture
 
 ```
-M5 bar  ──►  K=5 regime selector ──►  cluster id (0..4)
-                  + v9.4 relabel:        │
-                  HighVol → Down/Up      │
-                  if |24h ret| > 0.3%    ▼
-                                    per-cluster rule scanner
-                                    (28 rules, gated by cluster)
-                                          │
-                                          ▼
-                                    per-rule confirm head (XGB)
-                                    p_conf >= per-rule threshold ?
-                                          │ pass
-                                          ▼
-                                    meta gate (XGB, 18 v72l + cid + dir)
-                                    p_win >= 0.675 ?
-                                          │ pass
-                                          ▼
-                                       OPEN TRADE
+M5 bar ──► K=5 regime selector (4h-step) ──► cid ∈ {0..4}
+                       │
+                       ▼
+              RL Q-function per regime
+              XGBRegressor(300 trees, depth=4)
+              predicts expected PnL in R multiples
+                       │
+                  Q > 0.3R ?
+                       │ YES
+                       ▼
+              Per-regime confirm head
+              XGBClassifier(200 trees, depth=3)
+              P(win | entry) ≥ threshold ?
+                       │ YES
+                       ▼
+              Meta gate
+              XGBClassifier(300 trees, depth=4)
+              P(win | features, cid, dir) ≥ 0.775 ?
+                       │ YES
+                       ▼
+                    OPEN TRADE
 ```
 
-Per-cluster trade-rule allocation (after relabel):
+---
 
-| Cluster | Tradeable rules | Direction filter |
-|---|---|---|
-| C0 Uptrend | R3a-R3i (9 buy patterns) | longs only |
-| C1 MeanRevert | R0a-R0i (9 mean-revert) | both |
-| C2 TrendRange | R0d/e/g/h (4 breakouts) | both |
-| C3 Downtrend | R1a-R1h (8 sell patterns) | shorts only |
-| C4 HighVol | R2a/b/c/d (4 vol-breakout) | both — but rare after relabel |
+## Features
 
-## Holdout breakdown by cluster
+**18 v72l features** for entry/confirm/meta:
+`hurst_rs`, `ou_theta`, `entropy_rate`, `kramers_up`, `wavelet_er`,
+`vwap_dist`, `hour_enc`, `dow_enc`, `quantum_flow`, `quantum_flow_h4`,
+`quantum_momentum`, `quantum_vwap_conf`, `quantum_divergence`,
+`quantum_div_strength`, `vpin`, `sig_quad_var`, `har_rv_ratio`, `hawkes_eta`
 
-| Cluster | n | WR | PF | Total R |
+**11 exit features:** `unrealized_pnl_R`, `bars_held`, `pnl_velocity` + 8 context features.
+
+**20 meta features:** all 18 v72l + `direction` + `cid`.
+
+---
+
+## Hyperparameters
+
+| Component | n_estimators | max_depth | lr | Other |
 |---|---|---|---|---|
-| C0 Uptrend  | 1,064 | 68.6% | **3.75** | +3,392.7 |
-| C3 Downtrend | 634 | 67.2% | **4.23** | +2,162.2 |
-| C1 MeanRevert | 51 | 47.1% | 0.98 | -1.8 |
-| C2 TrendRange | 36 | 50.0% | 1.10 | +5.3 |
-| C4 HighVol | 118 | 47.5% | 0.90 | -21.7 |
+| Q-model (XGBRegressor) | 300 | 4 | 0.05 | subsample=0.8 |
+| Confirm (XGBClassifier) | 200 | 3 | 0.05 | subsample=0.8 |
+| Exit (XGBClassifier) | 300 | 5 | 0.05 | eval_metric=logloss |
+| Meta (XGBClassifier) | 300 | 4 | 0.05 | eval_metric=logloss |
 
-C0 + C3 carry 89% of trades and ~95% of profit — the relabel intentionally
-funnels strongly-directional bars into these two clusters.
+| Parameter | Value |
+|---|---|
+| MIN_Q (entry gate) | 0.3R expected PnL |
+| MAX_HOLD | 60 bars (5 hours) |
+| MIN_HOLD | 2 bars |
+| SL_HARD | -4.0R (ATR-based) |
+| TP target | 2:1 reward-to-risk |
+| Train/holdout cutoff | 2024-12-12 |
+| Meta threshold (XAU) | 0.775 (auto-swept) |
 
-## v83c Holdout (4h regime + range filter + kill-switch)
+---
 
-| Cluster | n | WR | PF | Total R |
-|---|---|---|---|---|
-| C0 Uptrend  | 641 | 74.9% | **6.63** | +2,725.6 |
-| C3 Downtrend | 273 | 75.8% | **6.58** | +1,101.9 |
-| C1 MeanRevert | 77 | 64.9% | 2.31 | +79.7 |
-| C2 TrendRange | 89 | 50.6% | 1.03 | +3.4 |
-| C4 HighVol | 407 | 60.4% | 2.03 | +547.2 |
+## Training Pipeline
 
-Improvements from v7.2:
-- **4h-step regime** (window=288, step=48) — catches regime changes 6× faster
-- **Range-position filter** — skips R1a/R1b C3 shorts below 65% of 20-bar range, R3e C0 longs above 35%
-- **Consecutive-loss kill-switch** — 3 SL in same (regime, dir) → 12h cooldown
-
-Full experiment: `experiments/v83_range_position_filter/`
-
-## Pipeline (retrain from scratch)
-
-Step numbers correspond to script filenames. Run from the **repo root**
-unless noted.
-
-### 1. Build the regime selector (K-means on 8 features incl. flow_4h_mean)
-
+### Prerequisites
 ```bash
-python products/oracle_xau/01_build_selector.py
-# → writes data/regime_selector_K4.json + data/regime_fingerprints_K4.csv
+# Required data files (in data/):
+swing_v5_xauusd.csv              # 590K M5 bars from Dukascopy (~407 MB)
+setups_*_v72l.csv                # 5 files, one per regime cid
+regime_fingerprints_4h.csv       # 4h-step regime labels
+regime_selector_4h.json          # K=5 centroids + relabel rules
 ```
 
-The selector JSON contains:
-- `feat_names`: 8-element list (last one is `flow_4h_mean`)
-- `centroids`: 5 PCA-space centroids
-- `cluster_names`: {"0":"Uptrend", "1":"MeanRevert", "2":"TrendRange",
-                     "3":"Downtrend", "4":"HighVol"}
-- `relabel`: `{"mode":"highvol_only","threshold":0.003,"highvol_cid":4,
-              "up_cid":0,"down_cid":3}` ← **v9.4 critical**
-
-### 2. Split labeled bars into per-cluster CSVs (with v9.4 relabel)
-
+### Train RL Entry
 ```bash
-python products/oracle_xau/02_split_clusters_with_relabel.py
-# → writes data/cluster_{0..4}_data.csv
+cd /home/jay/Desktop/new-model-zigzag
+source .venv/bin/activate
+python3 products/oracle_xau/train_rl_entry.py
 ```
 
-Note: this uses the post-hoc relabel rule (HighVol → Down/Up by return
-sign) so per-cluster training data matches what live inference will see.
+The script (`train_rl_entry.py`, originally `experiments/v84_rl_entry/01_q_learning.py`):
 
-### 3. Build setup signals (per-rule pattern scanner)
+1. Loads swing data (590K bars, ~407 MB)
+2. Merges 4h-step regime labels onto all setups
+3. Computes PnL labels (2:1 RR, 40-bar max, -4R hard stop)
+4. Trains 5 XGBRegressor Q-models — one per regime, target = `pnl_r`
+5. Filters setups where Q > 0.3R → assigns `rule="RL"`
+6. Trains 5 per-regime confirm XGBClassifiers on binary `label`
+7. Generates exit training data — bar-level MTM snapshots with "exit now?" labels
+8. Trains exit XGBClassifier
+9. Simulates all trades through exit model → trade-level PnL
+10. Trains meta XGBClassifier on `pnl_R > 0`
+11. Sweeps meta threshold [0.40-0.80] for max PF
+12. Saves bundle to `products/models/oracle_xau_validated.pkl`
 
-```bash
-python products/oracle_xau/03_build_setup_signals.py
-# → writes data/setups_{0..4}.csv
+---
+
+## v83c Shared Improvements
+
+All products inherit these from `experiments/v83_range_position_filter/`:
+
+1. **4h-step regime** (window=288, step=48) — catches regime changes 6× faster
+   than the original bar-by-bar classification
+2. **Range-position filter** — blocks R1a/R1b shorts below 65% of 20-bar range;
+   blocks R3e longs above 35%. Eliminates mid-range false signals.
+3. **Consecutive-loss kill-switch** — 3 SL in same (cid, direction) → 12-hour
+   cooldown on that regime+direction. Prevents death-spirals during transitions.
+4. **Cohort kills** — C2_R0h disabled (3-bar reversal cohort had 47.9% WR on
+   walk-forward; sister rules similarly weak).
+
+See `_shared/v83c_changes.md` for the full experiment breakdown.
+
+---
+
+## Bundle Structure
+
+```python
+{
+    'q_entry': {0: XGBRegressor, ..., 4: XGBRegressor},  # 5 Q-models
+    'mdls': {(0,'RL'): XGBClassifier, ..., (4,'RL'): XGBClassifier},  # 5 confirms
+    'thrs': {(0,'RL'): 0.50, ...},           # Per-regime confirm thresholds
+    'exit_mdl': XGBClassifier,                # 11 features
+    'meta_mdl': XGBClassifier,                # 20 features
+    'meta_threshold': 0.775,                  # Auto-selected
+    'min_q': 0.3,                             # Q-value entry gate
+    'rl_rule_name': 'RL',
+    'version': 'v84-rl',
+}
 ```
 
-### 4. Compute physics features (14 features incl. quantum_flow MTF)
+---
 
-```bash
-python products/oracle_xau/04_compute_physics_features.py
-# → writes data/setups_{0..4}_v6.csv
+## Deployment
+
+### Server config (`configs/oracle_xau.py`)
+```python
+rl_entry_mode: bool = True
+rl_min_q: float = 0.3
+regime_selector_json: str = "regime_selector_4h.json"
+kill_switch_losses: int = 3
+kill_switch_cooldown_hours: int = 12
+range_filter_lookback: int = 20
 ```
 
-### 5. Compute v7.2-lite features (4 extras: vpin, sig_quad_var,
-   har_rv_ratio, hawkes_eta)
-
+### Push to Render
 ```bash
-python products/oracle_xau/05_compute_v72l_features.py
-# → writes data/setups_{0..4}_v72l.csv
-```
-
-### 6. Train + validate (per-rule confirm + exit + meta + threshold sweep)
-
-```bash
-python products/oracle_xau/06_validate_v72_lite.py
-# → writes:
-#   - meta_threshold_v72l.txt (selected threshold; current: 0.675)
-#   - data/v72l_trades_holdout.csv (full holdout trade tape)
-#   - prints PF/WR/DD per cluster
-```
-
-### 7. Pickle for deployment (bundle all models + threshold)
-
-```bash
-cd ../my-agents-and-website/commercial/server/decision_engine
-rm -f /tmp/oracle_deployed_pipeline_cache.pkl
-python scripts/pickle_validated_models.py oracle_xau
-# → writes new-model-zigzag/models/oracle_xau_validated.pkl
-```
-
-### 8. Copy to commercial repo + tag rollback + push
-
-```bash
-cp new-model-zigzag/models/oracle_xau_validated.pkl \
-   ../my-agents-and-website/commercial/server/decision_engine/models/
-cp new-model-zigzag/data/regime_selector_K4.json \
-   ../my-agents-and-website/commercial/server/decision_engine/data/
-cd ../my-agents-and-website/commercial
-git tag -a "pre-oracle-$(date +%Y%m%d)" -m "Pre-Oracle-XAU retrain"
+cd /home/jay/Desktop/my-agents-and-website/commercial
+cp ../new-model-zigzag/products/models/oracle_xau_validated.pkl \
+   server/decision_engine/models/
 git add server/decision_engine/models/oracle_xau_validated.pkl \
-        server/decision_engine/data/regime_selector_K4.json
-git commit -m "Retrain Oracle XAU on $(date +%Y-%m-%d) data"
-git push origin main
+        server/decision_engine/configs/oracle_xau.py \
+        server/decision_engine/decide.py
+git commit -m "deploy oracle_xau v84 RL bundle"
+git push origin main  # Render auto-deploys
 ```
 
-Render auto-deploys ~60s after push.
-
-## Critical files (must keep)
-
-```
-data/swing_v5_xauusd.csv       ← raw M5 + tick_volume + label
-data/labeled_v4.csv            ← ATR-based 0/1/2 labels per bar
-products/_shared/quantum_flow.py
-products/_shared/regime_selector_xau.json   (canonical, with v9.4 relabel
-                                              + 2,051 block_boundary_times)
-models/oracle_xau_validated.pkl              (current production)
-```
-
-## After retrain: regenerate block boundaries
-
-The selector JSON ships with `block_boundary_times` — every 288-bar
-block START timestamp from the training CSV. Live `/decide` reads
-this list to align inference-time blocks to training-time blocks
-exactly (no UTC-midnight approximation).
-
-```bash
-python products/_shared/build_block_boundaries.py    # rebuilds + embeds
-cp data/regime_selector_K4.json \
-   ../my-agents-and-website/commercial/server/decision_engine/data/
+### EA Endpoint
+The MT5 EA sends M5 bars to `POST /decide/oracle_xau`. Response:
+```json
+{
+  "action": "open",
+  "direction": "buy",
+  "rule": "RL",
+  "cluster_id": 0,
+  "cluster_name": "Uptrend",
+  "p_conf": 0.723,
+  "p_win": 0.812,
+  "sl_atr_mult": 4.0,
+  "tp_atr_mult": 2.0
+}
 ```
 
-The live server extrapolates beyond the last embedded boundary by
-counting 288 bars in its Dukascopy cache, so the regime keeps
-advancing daily even between retrains. But if retrain skips more
-than ~30 days (the live cache window), the cache won't bridge to
-the embedded list and classify falls back to UTC-midnight anchor.
-
-## Rollback
-
-```bash
-cd ../my-agents-and-website/commercial
-git reset --hard pre-v9.4   # last known-good before v9.4 regime change
-git push --force-with-lease origin main
-```
+Exit signals via `POST /decide/oracle_xau/exit` with position context
+(entry_price, entry_atr, bars_held, direction). Server computes PnL
+and records kill-switch state.

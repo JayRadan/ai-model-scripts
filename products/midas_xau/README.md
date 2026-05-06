@@ -1,111 +1,145 @@
-# Midas XAU — entry-level XAUUSD pattern scanner
+# Midas XAU — Entry-Level XAUUSD Pattern Scanner
 
-Same 28-rule pattern catalog as Oracle, but **no meta gate** — trades
-every per-rule confirmation that passes Stage 1. Higher trade count,
-lower selectivity, simpler pricing tier.
+> **Version:** v83c (Rule-based) | **Holdout PF:** 5.25 | **WR:** 73.4% | **Trades:** 1,693  
+> **Bundle:** `midas_xau_validated.pkl` (31 MB) | **Deployed:** 2026-05-06
 
-## At a glance
+The entry-level product. Same 28-rule pattern catalog as Oracle, but **no
+meta gate** — trades every per-rule confirmation that passes Stage 1.
+Higher trade count, simpler pricing tier. Biggest beneficiary of the v83c
+range filter + kill-switch (+2.70 PF over v6 baseline).
 
-| | Value |
-|---|---|
-| Asset | XAUUSD M5 |
-| Architecture | v6 (14 physics features) — **no meta gate** |
-| Regime detector | K=5 K-means + v9.4 highvol_only relabel (±0.3%/24h) — **v83c: 4h-step** |
-| Trained on | Dukascopy 2018-01-02 → 2024-12-12 |
-| Holdout window | 2024-12-12 → 2026-05-01 |
-| **Holdout PF (v6)** | **2.55** (was 1.67 pre-v9.4) |
-| **Holdout PF (v83c)** | **5.25** (+2.70) |
-| **Holdout WR (v83c)** | **73.4%** (was 59.7%) |
-| **Holdout n (v83c)** | **1,693** (was 1,582) |
-| Meta threshold | **0.675** |
-| Deployed pkl | `commercial/.../models/midas_xau_validated.pkl` |
-| Deploy commit | `bd411c8` (v83c) |
+---
+
+## Performance History
+
+| Version | Entry Type | PF | WR | Trades | Key Change |
+|---|---|---|---|---|---|
+| v6 | Rule-based (28 rules) | 2.55 | 59.7% | 1,582 | Baseline Midas (14 features, no meta) |
+| **v83c** | **Rule-based + filters** | **5.25** | **73.4%** | **1,693** | 4h regime + range filter + kill-switch |
+| v84 RL | RL Q-functions | ~2.0 | ~40% | — | **Failed — rolled back.** 14 features insufficient for RL |
+
+### v83c Holdout by Regime
+
+| Regime | Trades | WR | PF | Total R |
+|---|---|---|---|---|
+| C0 Uptrend | 688 | 79.7% | **9.12** | +2,891 |
+| C1 MeanRevert | 228 | 73.2% | 3.15 | +189 |
+| C2 TrendRange | 223 | 64.1% | 2.21 | +120 |
+| C3 Downtrend | 314 | 77.4% | **5.87** | +1,196 |
+| C4 HighVol | 240 | 69.2% | 2.98 | +178 |
+
+---
 
 ## Why no meta gate?
 
-Midas is positioned as the higher-trade-frequency entry product. The meta
-gate would cut ~30-40% of trades to chase higher PF — Midas customers
-prefer more frequent activity over Oracle-tier selectivity.
+Midas is the higher-trade-frequency entry product. The meta gate would
+cut ~30-40% of trades to chase higher PF — but Midas customers prefer
+more frequent activity over Oracle-tier selectivity. This makes Midas
+the most responsive product — it catches moves Oracle might pass on.
 
-This means **Midas was the biggest beneficiary of the v9.4 regime relabel**:
-because there's no Stage 2 to filter bad-regime mistakes, fixing the regime
-labeller had a 53% PF impact (1.67 → 2.55).
+---
 
-## Holdout breakdown by cluster
+## Features (14 v6)
 
-| Cluster | n | WR | PF | Total R |
+Midas uses a reduced feature set compared to Oracle (14 vs 18):
+```
+hurst_rs, ou_theta, entropy_rate, kramers_up, wavelet_er,
+vwap_dist, hour_enc, dow_enc, quantum_flow, quantum_flow_h4,
+quantum_momentum, quantum_vwap_conf, quantum_divergence,
+quantum_div_strength
+```
+Missing vs v72l: `vpin`, `sig_quad_var`, `har_rv_ratio`, `hawkes_eta`.
+
+---
+
+## Why RL failed for Midas
+
+The v84 RL experiment (`experiments/v84_rl_entry/06_midas_rl.py`) produced
+~40% WR and PF ~2.0 — worse than rule-based v83c (73.4% WR, PF 5.25).
+
+Root causes:
+1. **14 features insufficient** — the 4 missing features (vpin, sig_quad_var,
+   har_rv_ratio, hawkes_eta) carry critical microstructure/volatility info
+2. **137 per-rule confirm models** beat 5 RL-confirms — the hand-coded
+   catalog benefits from specialized, rule-specific confirmation heads
+3. **No meta gate** means lower-quality RL entries aren't filtered out
+
+Future: upgrading Midas to 18 v72l features could make RL viable.
+
+---
+
+## Architecture
+
+```
+M5 bar ──► K=5 regime selector (4h-step) ──► cid ∈ {0..4}
+                       │
+                       ▼
+              28-rule hand-coded catalog
+              (rule detection on OHLC patterns)
+                       │
+                       ▼
+              Per-rule confirm head (XGB, 14 v6 features)
+              p_conf ≥ per-rule threshold ?  (137 models total)
+                       │ YES
+                       ▼
+                    OPEN TRADE
+              (NO meta gate — simpler, more trades)
+```
+
+---
+
+## Hyperparameters
+
+| Component | n_estimators | max_depth | lr | Notes |
 |---|---|---|---|---|
-| C0 Uptrend | 477 | 66.2% | **3.74** | +1,552.1 |
-| C3 Downtrend | 626 | 64.9% | **3.58** | +1,932.5 |
-| C1 MeanRevert | 155 | 53.5% | 1.50 | +122.8 |
+| Confirm (XGBClassifier) | 200 | 3 | 0.05 | 137 models, one per (cid, rule) |
+| Exit (XGBClassifier) | 300 | 5 | 0.05 | Same as Oracle |
 
-## v83c Holdout (4h regime + range filter + kill-switch)
+| Parameter | Value |
+|---|---|
+| Confirm threshold | Per-rule (auto-calibrated, ~0.50) |
+| MAX_HOLD | 60 bars |
+| SL_HARD | -4.0R |
+| TP target | 2:1 RR |
 
-| Cluster | n | WR | PF | Total R |
-|---|---|---|---|---|
-| C0 Uptrend  | 982 | 78.2% | **7.48** | +4,108.6 |
-| C3 Downtrend | 283 | 70.3% | **4.89** | +917.6 |
-| C1 MeanRevert | 35 | 71.4% | 2.98 | +47.8 |
-| C2 TrendRange | 51 | 62.7% | 2.19 | +69.4 |
-| C4 HighVol | 342 | 64.0% | 2.38 | +525.2 |
+---
 
-Full experiment: `experiments/v83_range_position_filter/`
-| C2 TrendRange | 302 | 43.0% | 0.87 | -85.5 |
-| C4 HighVol | 22 | 40.9% | 0.90 | -4.7 |
+## Bundle Structure (31 MB — largest)
 
-C2/C4 are net-negative — without a meta gate, they leak ~90 R combined.
-Argument for cluster-tradeability flags: disable C2 + C4 entirely → projected
-PF closer to 3.0, but at cost of trade count.
+```python
+{
+    'mdls': {(cid, rule): XGBClassifier, ...},  # 137 confirm models
+    'thrs': {(cid, rule): float, ...},           # Per-rule thresholds
+    'exit_mdl': XGBClassifier,
+    'meta_mdl': XGBClassifier,                   # Meta still present but not used
+    'meta_threshold': 0.675,
+    'v6_feats': [...],                           # 14 v6 feature names
+}
+```
 
-## Pipeline (retrain from scratch)
+No `q_entry` key — RL is disabled (`rl_entry_mode=False` in config).
 
-**Reuses Oracle XAU's pipeline steps 1-4** (regime selector + cluster
-split + setups + physics). Then a different validation script.
+---
 
-### 1-4. Run Oracle XAU steps 1-4 first
+## Deployment
 
+### Server config (`configs/midas_xau.py`)
+```python
+rl_entry_mode: bool = False    # Rolled back to rule-based
+regime_selector_json: str = "regime_selector_4h.json"
+kill_switch_losses: int = 3
+range_filter_lookback: int = 20
+```
+
+### Push to Render
 ```bash
-python products/oracle_xau/01_build_selector.py
-python products/oracle_xau/02_split_clusters_with_relabel.py
-python products/oracle_xau/03_build_setup_signals.py
-python products/oracle_xau/04_compute_physics_features.py
+cd /home/jay/Desktop/my-agents-and-website/commercial
+cp ../new-model-zigzag/products/models/midas_xau_validated.pkl \
+   server/decision_engine/models/
+git add server/decision_engine/models/midas_xau_validated.pkl
+git commit -m "deploy midas_xau v83c (rule-based, PF 5.25)"
+git push origin main
 ```
 
-### 5. Train + validate Midas v6
-
-```bash
-python products/midas_xau/01_validate_v6.py
-# → writes:
-#   - experiments/v6_xau_deploy/_v6_validated_raw.pkl  (raw trained objects)
-#   - data/v6_trades_holdout_xau.csv                    (holdout trade tape)
-#   - prints PF/WR/DD per cluster
-```
-
-### 6. Pickle for deployment
-
-```bash
-cd ../my-agents-and-website/commercial/server/decision_engine
-python scripts/pickle_validated_models.py midas_xau
-# → writes new-model-zigzag/models/midas_xau_validated.pkl
-```
-
-### 7. Copy + commit + push (same as Oracle XAU step 8)
-
-## Critical files
-
-```
-data/swing_v5_xauusd.csv
-data/labeled_v4.csv
-data/cluster_{0..4}_data.csv         (relabeled, from Oracle pipeline)
-data/setups_{0..4}_v6.csv             (with physics features)
-products/midas_xau/_v6_validated_raw.pkl
-models/midas_xau_validated.pkl
-```
-
-## v9.4 block boundaries shared with Oracle XAU
-
-Midas reuses Oracle XAU's `regime_selector_K4.json`, which carries
-the v9.4 `block_boundary_times`. So Midas's live regime decisions
-also align to training-time v99 blocks. No separate boundary file
-is needed. After every retrain run `_shared/build_block_boundaries.py`
-once and Midas inherits the update via the shared selector.
+### EA Endpoint
+`POST /decide/midas_xau`

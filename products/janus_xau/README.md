@@ -124,4 +124,9 @@ git push origin main
 | 2 | `scripts/02_train_pivot.py` | Train pivot_score + pivot_dir XGB models |
 | 3 | `scripts/03_build_setups.py` | Build setup signals from pivot predictions |
 | 4 | `scripts/04_validate.py` | Walk-forward validation with meta gate |
-| 5 | `scripts/05_pickle_janus.py` | Save bundle for server deployment |
+| 5 | `scripts/05_pickle_janus.py` | Save `janus_xau_validated.pkl` for server deployment |
+
+### Output files
+- `models/pivot_score_v74.json` — Pivot score model (XGBoost JSON)
+- `models/pivot_dir_v74.json` — Pivot direction model (XGBoost JSON)
+- `../models/janus_xau_validated.pkl` — Deployed bundle (5.3 MB)

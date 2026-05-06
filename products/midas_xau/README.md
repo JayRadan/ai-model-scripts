@@ -151,6 +151,13 @@ git push origin main
 | # | Script | What it does |
 |---|---|---|
 | 1 | `scripts/01_validate_v6.py` | Original v6 training — 14 features, 28 rules, confirm only |
+| 2 | `scripts/02_rl_experiment.py` | **v84 RL attempt** — Q-learning on 14 features (PF ~2.0, WR ~40%) |
 
-Midas uses the same v83c infrastructure as Oracle (regime selector,
-range filter, kill-switch) — see `oracle_xau/scripts/` for those.
+**Why only 2 scripts?** Midas shares Oracle's v83c infrastructure:
+- Regime selector: same `regime_selector_4h.json` as Oracle XAU
+- Range filter + kill-switch: same `_shared/` config, applied via `deploy_midas_v83c.json`
+- The confirm models were retrained via the Oracle pipeline with Midas features
+
+### Additional files
+- `holdout_trades.csv` — v83c holdout trades (PF 5.25, 1,693 trades)
+- `deploy_midas_v83c.json` — v83c deployment config snapshot

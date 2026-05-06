@@ -143,3 +143,14 @@ git push origin main
 
 ### EA Endpoint
 `POST /decide/midas_xau`
+
+---
+
+## Full Pipeline Scripts
+
+| # | Script | What it does |
+|---|---|---|
+| 1 | `scripts/01_validate_v6.py` | Original v6 training — 14 features, 28 rules, confirm only |
+
+Midas uses the same v83c infrastructure as Oracle (regime selector,
+range filter, kill-switch) — see `oracle_xau/scripts/` for those.

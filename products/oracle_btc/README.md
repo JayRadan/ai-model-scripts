@@ -143,3 +143,17 @@ git push origin main
 
 ### EA Endpoint
 `POST /decide/oracle_btc` — returns RL decisions with `rule="RL"`.
+
+---
+
+## Full Pipeline Scripts
+
+| # | Script | What it does |
+|---|---|---|
+| 1 | `scripts/01_validate_v72l.py` | Original v72l BTC training — 28 rules + confirm + meta |
+| 2 | `scripts/02_train_export.py` | Export models to pickle |
+| 2b | `scripts/02b_build_selector.py` | Build BTC K=5 regime selector |
+| 3 | `scripts/03_v83c_pipeline.py` | v83c: 4h regime + range filter + kill-switch |
+| 4 | `scripts/04_train_rl_entry.py` | **v84**: Train RL Q-functions, confirm, exit, meta |
+
+Root shortcut: `train_rl_entry.py` (same as script 04)

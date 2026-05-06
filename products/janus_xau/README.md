@@ -112,3 +112,16 @@ git push origin main
 
 ### EA Endpoint
 `POST /decide/janus_xau`
+
+---
+
+## Full Pipeline Scripts
+
+| # | Script | What it does |
+|---|---|---|
+| 0 | `scripts/00_compute_features.py` | Compute pivot features from OHLC |
+| 1 | `scripts/01_label_bars.py` | Label every bar as pivot/non-pivot |
+| 2 | `scripts/02_train_pivot.py` | Train pivot_score + pivot_dir XGB models |
+| 3 | `scripts/03_build_setups.py` | Build setup signals from pivot predictions |
+| 4 | `scripts/04_validate.py` | Walk-forward validation with meta gate |
+| 5 | `scripts/05_pickle_janus.py` | Save bundle for server deployment |

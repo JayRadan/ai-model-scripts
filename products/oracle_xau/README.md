@@ -207,3 +207,26 @@ The MT5 EA sends M5 bars to `POST /decide/oracle_xau`. Response:
 Exit signals via `POST /decide/oracle_xau/exit` with position context
 (entry_price, entry_atr, bars_held, direction). Server computes PnL
 and records kill-switch state.
+
+---
+
+## Full Pipeline Scripts
+
+All scripts in `scripts/` — run in order to reproduce from scratch:
+
+| # | Script | What it does |
+|---|---|---|
+| 1 | `scripts/01_validate_v72l.py` | Original v72l training — 28-rule confirm + exit + meta |
+| 2 | `scripts/02_train_export.py` | Export trained models to pickle |
+| 3 | `scripts/03_train_rl_entry.py` | **v84**: Train 5 Q-functions, confirm, exit, meta (RL entry) |
+| 4 | `scripts/04_full_rl_exit.py` | Experimental: RL exit model (PF 3.85 — worse than ML exit) |
+| 5 | `scripts/05_deploy_bundle.py` | Save final bundle to `products/models/` |
+
+Also in root:
+- `train_rl_entry.py` — shortcut to just run RL training (same as script 03)
+- `deploy_bundle.py` — shortcut to deploy (same as script 05)
+
+### Shared dependencies
+- `_shared/scripts/build_regime_selector.py` — K=5 K-means + relabel rules
+- `_shared/regime_selector_xau.json` — Pre-built XAU regime selector
+- `_shared/04b_compute_physics_features.py` — Physics feature computer

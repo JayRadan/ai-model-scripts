@@ -49,7 +49,7 @@ Replaces 28-rule catalog with 5 XGBRegressor Q-functions. PF gains:
 ```
 products/
 ├── README.md                     ← THIS FILE
-├── models/                       ← All .pkl bundles
+├── models/                       ← All .pkl bundles (gitignored, on disk)
 │   ├── oracle_xau_validated.pkl
 │   ├── oracle_btc_validated.pkl
 │   ├── midas_xau_validated.pkl
@@ -57,19 +57,43 @@ products/
 ├── _shared/                      ← Cross-product infrastructure
 │   ├── regime_selector_xau.json
 │   ├── regime_selector_btc.json
-│   └── v83c_changes.md
+│   ├── v83c_changes.md
+│   └── scripts/
+│       ├── build_regime_selector.py    ← K=5 K-means + relabel rules
+│       └── visualize_regime.py         ← 4h-step regime chart
 ├── oracle_xau/                   ← Flagship RL model
 │   ├── README.md
-│   ├── train_rl_entry.py
-│   └── deploy_bundle.py
+│   ├── train_rl_entry.py              ← Quick: just RL
+│   ├── deploy_bundle.py               ← Save bundle to server
+│   └── scripts/                       ← Full pipeline (5 steps)
+│       ├── 01_validate_v72l.py         ← Original v72l training
+│       ├── 02_train_export.py          ← Export models
+│       ├── 03_train_rl_entry.py        ← RL Q-learning entry
+│       ├── 04_full_rl_exit.py          ← RL exit (experimental)
+│       └── 05_deploy_bundle.py         ← Deploy to server
 ├── oracle_btc/                   ← BTC RL model
 │   ├── README.md
-│   └── train_rl_entry.py
+│   ├── train_rl_entry.py
+│   └── scripts/
+│       ├── 01_validate_v72l.py
+│       ├── 02_train_export.py
+│       ├── 02b_build_selector.py       ← BTC K=5 regime selector
+│       ├── 03_v83c_pipeline.py         ← v83c range filter + kill-switch
+│       └── 04_train_rl_entry.py
 ├── midas_xau/                    ← Entry-level rule-based
-│   └── README.md
+│   ├── README.md
+│   └── scripts/
+│       └── 01_validate_v6.py           ← v6 (14-feature) training
 └── janus_xau/                    ← Pivot-score experimental
     ├── README.md
-    └── models/
+    ├── models/
+    └── scripts/
+        ├── 00_compute_features.py
+        ├── 01_label_bars.py
+        ├── 02_train_pivot.py
+        ├── 03_build_setups.py
+        ├── 04_validate.py
+        └── 05_pickle_janus.py
 ```
 
 ---

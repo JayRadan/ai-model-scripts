@@ -1,0 +1,22 @@
+============================================================
+  v83c BTC — FULL PIPELINE
+============================================================
+
+[1/6] Retraining BTC regime (4h step)...
+  830,694 bars from 2018-01-02 03:00:00 to 2026-05-02 21:35:00
+  C3→C3   Downtrend n= 2507 ret=-3.66% vol=0.184%
+  C2→C0     Uptrend n= 2830 ret=+4.36% vol=0.191%
+  C4→C4     HighVol n= 1639 ret=-1.29% vol=0.363%
+  C0→C1  MeanRevert n= 5327 ret=+0.21% vol=0.128%
+  C1→C2  TrendRange n= 4531 ret=+0.07% vol=0.129%
+  Saved: /home/jay/Desktop/new-model-zigzag/experiments/v83_range_position_filter/regime_selector_btc_4h.json (16834 windows, 25s)
+
+[2/6] Assigning new regime to all bars...
+  1s
+
+[3/6] Loading BTC setups + relabeling...
+Traceback (most recent call last):
+  File "/home/jay/Desktop/new-model-zigzag/experiments/v83_range_position_filter/09_btc_pipeline.py", line 154, in <module>
+    if tm in time_to_idx.index:
+             ^^^^^^^^^^^^^^^^^
+AttributeError: 'dict' object has no attribute 'index'

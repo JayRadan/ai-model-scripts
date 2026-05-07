@@ -1,0 +1,22 @@
+nohup: ignoring input
+============================================================
+  RL Entry for MIDAS XAU
+============================================================
+[1/4] Loading...
+  42s — train=54,088
+[2/4] Training RL Entry...
+  C0: 1,458 with Q>0.3R (13.8%)
+  C1: 834 with Q>0.3R (4.9%)
+  C2: 1,105 with Q>0.3R (7.7%)
+  C3: 3,154 with Q>0.3R (36.2%)
+  C4: 996 with Q>0.3R (29.9%)
+  7,547 entries, 38s
+[3/4] Training confirm + exit + meta...
+  confirm: 5 models
+  2,075 confirmed
+  Meta=0.575, 109s
+[4/4] Deploying Midas RL bundle...
+  Deployed: /home/jay/Desktop/my-agents-and-website/commercial/server/decision_engine/models/midas_xau_validated.pkl
+  Entry: 5 Q-models
+  Confirm: 5
+Done.

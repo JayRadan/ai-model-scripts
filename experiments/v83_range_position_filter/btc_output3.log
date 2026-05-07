@@ -1,0 +1,40 @@
+============================================================
+  v83c BTC — FULL PIPELINE
+============================================================
+
+[1/6] Retraining BTC regime (4h step)...
+  830,694 bars from 2018-01-02 03:00:00 to 2026-05-02 21:35:00
+  C3→C3   Downtrend n= 2507 ret=-3.66% vol=0.184%
+  C2→C0     Uptrend n= 2830 ret=+4.36% vol=0.191%
+  C4→C4     HighVol n= 1639 ret=-1.29% vol=0.363%
+  C0→C1  MeanRevert n= 5327 ret=+0.21% vol=0.128%
+  C1→C2  TrendRange n= 4531 ret=+0.07% vol=0.129%
+  Saved: /home/jay/Desktop/new-model-zigzag/experiments/v83_range_position_filter/regime_selector_btc_4h.json (16834 windows, 25s)
+
+[2/6] Assigning new regime to all bars...
+  2s
+
+[3/6] Loading BTC setups + relabeling...
+  train=120,663 test=24,610 (16s)
+
+[4/6] Training...
+  btc-conf: 114 models
+  36,100 confirmed
+  Exit: 1,632,792 rows
+  Meta threshold: 0.775, 343s
+
+[5/6] Saving models...
+  114 confirm + exit + meta saved, 0s
+
+[6/6] Holdout...
+
+  ORIGINAL: n=1,899 WR=61.8% PF=2.85 Total=+4564.1R
+
+  BTC v83c FINAL: n=1033 WR=64.4% PF=3.03 Total=+2304.1R
+    C0 Uptrend: n=295 WR=74.6% PF=5.83 R=+1108.0
+    C1 MeanRevert: n=250 WR=60.4% PF=1.78 R=+223.5
+    C2 TrendRange: n=172 WR=57.0% PF=1.65 R=+152.2
+    C3 Downtrend: n=222 WR=65.3% PF=3.89 R=+649.4
+    C4 HighVol: n=94 WR=54.3% PF=2.08 R=+171.0
+
+Done. Total: 2s

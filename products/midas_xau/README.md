@@ -141,6 +141,11 @@ git commit -m "deploy midas_xau v83c (rule-based, PF 5.25)"
 git push origin main
 ```
 
+### v85 Drawdown Circuit Breaker
+Shared across all products. Tracks cumulative PnL; blocks entries when
+PnL drops >25% from session peak. Three unblock paths: regime change,
+4h timeout, or PnL recovery to within 10% of peak.
+
 ### EA Endpoint
 `POST /decide/midas_xau`
 

@@ -204,9 +204,15 @@ The MT5 EA sends M5 bars to `POST /decide/oracle_xau`. Response:
 }
 ```
 
+### v85 Drawdown Circuit Breaker
+After a trade closes, the server tracks cumulative PnL for the product.
+If PnL drops >25% from the session peak and the regime hasn't changed,
+ALL new entries are blocked. Unblocks on: regime change, 4h timeout,
+or PnL recovery to within 10% of peak.
+
 Exit signals via `POST /decide/oracle_xau/exit` with position context
 (entry_price, entry_atr, bars_held, direction). Server computes PnL
-and records kill-switch state.
+and records kill-switch + drawdown state.
 
 ---
 

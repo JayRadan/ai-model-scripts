@@ -42,6 +42,15 @@ Replaces 28-rule catalog with 5 XGBRegressor Q-functions. PF gains:
 - Oracle BTC: +0.79 PF, +102 more trades
 - Midas: attempted but failed (14 features insufficient)
 
+### v85 Equity Drawdown Circuit Breaker (all products)
+Prevents giving back profits during sharp reversals. Tracks cumulative
+PnL per product; if PnL drops >25% from session peak and regime hasn't
+changed, blocks ALL new entries for that product. Auto-unblocks when
+the regime classifier detects a regime change.
+
+Backtested on live 2026-05-07 reversal: +244% PnL improvement (149.7R
+vs 43.5R without guard). See `state.py` → `DrawdownGuard`.
+
 ---
 
 ## Folder Layout

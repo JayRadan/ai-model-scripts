@@ -110,6 +110,11 @@ git commit -m "deploy janus_xau v74 (pivot-score)"
 git push origin main
 ```
 
+### v85 Drawdown Circuit Breaker
+Shared across all products. See `state.py` → `DrawdownGuard`. Blocks
+when PnL drops >25% from session peak; unblocks on regime change, 4h
+timeout, or PnL recovery.
+
 ### EA Endpoint
 `POST /decide/janus_xau`
 

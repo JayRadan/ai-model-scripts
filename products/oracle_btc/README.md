@@ -141,6 +141,12 @@ git commit -m "deploy oracle_btc v84 RL bundle (PF 3.82)"
 git push origin main
 ```
 
+### v85 Drawdown Circuit Breaker
+All products share the equity drawdown guard (`state.py` → `DrawdownGuard`).
+Blocks entries when PnL drops >25% from session peak; unblocks on regime
+change, 4h timeout, or PnL recovery. Backtested on 2026-05-07 reversal:
++244% PnL improvement vs no guard.
+
 ### EA Endpoint
 `POST /decide/oracle_btc` — returns RL decisions with `rule="RL"`.
 

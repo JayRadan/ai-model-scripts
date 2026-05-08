@@ -1,7 +1,8 @@
 # Oracle XAU — Flagship RL-Enhanced XAUUSD Model
 
-> **Version:** v84 (RL Entry) | **Holdout PF:** 4.21 | **WR:** 70.2% | **Trades:** 1,207  
-> **Bundle:** `oracle_xau_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06
+> **Version:** v84 entry + v88 reverse-setup exit
+> **Unseen-30% PF:** 4.54 (was 4.18 pre-v88 exit) | **WR:** 70.2% | **MaxDD:** 15R (was 20R)  
+> **Bundle:** `oracle_xau_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06 (entry) / 2026-05-08 (exit)
 
 The premium-tier product. Uses 5 RL Q-functions (one per regime) to select
 entries, replacing the 28-rule hand-coded catalog. Two-stage confirmation:
@@ -56,6 +57,42 @@ M5 bar ──► K=5 regime selector (4h-step) ──► cid ∈ {0..4}
                        ▼
                     OPEN TRADE
 ```
+
+## Exit Logic (v88, deployed 2026-05-08)
+
+```
+Every in-trade M5 bar:
+  1. Hard SL @ -4R (cp <= -1.0R in SL units)
+  2. v88 Reverse-Setup RL Exit:        ← NEW
+     scan all 30 rules at this bar
+     if any opposite-direction setup fires:
+        if q_entry[cid](v72l) > 0.10  → exit
+  3. Trail (act=3.0R, gb=60% of peak)
+  4. Binary ML exit (legacy)
+  5. 60-bar max hold
+```
+
+The v88 reverse-setup check sits **before** the trail check so it can
+catch reversals before the trail's high activation threshold (3R)
+matters. Wraps in try/except — any rule-detection error falls through
+to existing logic. Latency: ~232 ms per call (after slicing df to last
+200 bars before rule scanning).
+
+Validated on the unseen 30% of v84 RL trades (XAU 421 trades,
+2025-12-10 → 2026-05-01):
+
+| Metric | Pre-v88 exit | Post-v88 exit | Δ |
+|---|---|---|---|
+| PF | 4.18 | **4.54** | +0.36 |
+| Total R | +959R | +963R | +4R |
+| MaxDD | 20R | **15R** | **-5R** |
+| Reverse-setup exits | — | 87 / 421 (21%) | new |
+| Hard SL hits | 52 | 42 | -10 |
+| Max-hold exits | 243 | 191 | -52 |
+
+Source: `experiments/v88_exit_rl/13_reverse_setup_exit.py`. See
+`experiments/v88_exit_rl/README.md` for the full 13-experiment catalog
+(12 disproven attempts + this winner).
 
 ---
 
@@ -227,6 +264,17 @@ All scripts in `scripts/` — run in order to reproduce from scratch:
 | 3 | `scripts/03_train_rl_entry.py` | **v84**: Train 5 Q-functions, confirm, exit, meta (RL entry) |
 | 4 | `scripts/04_full_rl_exit.py` | Experimental: RL exit model (PF 3.85 — worse than ML exit) |
 | 5 | `scripts/05_deploy_bundle.py` | Save final bundle to `products/models/` |
+
+### v88 Exit Improvement Experiments
+None of these change the model bundle — they only modify the runtime
+exit logic in `commercial/server/decision_engine/decide.py`. See
+`experiments/v88_exit_rl/README.md` for the full catalog.
+
+| Script | Outcome |
+|---|---|
+| `experiments/v88_exit_rl/13_reverse_setup_exit.py` | ✅ DEPLOYED — PF 4.18 → 4.54, MaxDD -5R |
+| `experiments/v88_exit_rl/01..12_*.py` | ❌ All disproven on unseen 30% — see README |
+| `experiments/v87_multi_head_exit/` | ❌ -866R on unseen, REMOVED 2026-05-08 |
 
 Also in root:
 - `train_rl_entry.py` — shortcut to just run RL training (same as script 03)

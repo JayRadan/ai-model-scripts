@@ -1,7 +1,8 @@
 # Oracle BTC — RL-Enhanced BTCUSD Model
 
-> **Version:** v84 (RL Entry) | **Holdout PF:** 3.82 | **WR:** 67.9% | **Trades:** 1,135  
-> **Bundle:** `oracle_btc_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06
+> **Version:** v84 entry + v88 reverse-setup exit
+> **Unseen-30% PF:** 5.26 (was 4.27 pre-v88 exit) | **WR:** 67.9% | **MaxDD:** 25R (was 30R)  
+> **Bundle:** `oracle_btc_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06 (entry) / 2026-05-08 (exit)
 
 Same v72l architecture as Oracle XAU, but trained on Bitcoin M5 data with
 its own BTC-specific regime selector (K=5, full_directional relabel).
@@ -147,6 +148,32 @@ Blocks entries when PnL drops >25% from session peak; unblocks on regime
 change, 4h timeout, or PnL recovery. Backtested on 2026-05-07 reversal:
 +244% PnL improvement vs no guard.
 
+### v88 Reverse-Setup RL Exit (deployed 2026-05-08)
+At every in-trade bar, scans all 30 rule detectors for any
+opposite-direction setup. If one fires AND `q_entry[cid](v72l) > 0.10`,
+exit. Implementation in `decide_exit` of
+[`commercial/server/decision_engine/decide.py`](../../../my-agents-and-website/commercial/server/decision_engine/decide.py),
+between hard-SL and trail. ~232 ms per call.
+
+Validated on the unseen 30% of v84 RL trades (BTC 341 trades,
+2025-11-11 → 2026-05-01):
+
+| Metric | Pre-v88 exit | Post-v88 exit | Δ |
+|---|---|---|---|
+| PF | 4.27 | **5.26** | **+0.99** |
+| Total R | +841R | +865R | +24R |
+| MaxDD | 30R | **25R** | **-5R** |
+| Reverse-setup exits | — | 51 / 341 (15%) | new |
+| Hard SL hits | 39 | 28 | -11 |
+| Max-hold exits | 214 | 186 | -28 |
+
+BTC saw the biggest PF lift (+0.99) of any product because a larger
+fraction of its trades are in regimes where opposite-direction setups
+fire frequently. Source:
+`experiments/v88_exit_rl/13_reverse_setup_exit.py`. Full disprove
+catalog of 12 other approaches in
+`experiments/v88_exit_rl/README.md`.
+
 ### EA Endpoint
 `POST /decide/oracle_btc` — returns RL decisions with `rule="RL"`.
 
@@ -163,3 +190,14 @@ change, 4h timeout, or PnL recovery. Backtested on 2026-05-07 reversal:
 | 4 | `scripts/04_train_rl_entry.py` | **v84**: Train RL Q-functions, confirm, exit, meta |
 
 Root shortcut: `train_rl_entry.py` (same as script 04)
+
+### v88 Exit Improvement Experiments
+Runtime-only changes (no model retrain). See
+`experiments/v88_exit_rl/README.md` for the full 13-experiment catalog.
+
+| Script | Outcome |
+|---|---|
+| `experiments/v88_exit_rl/13_reverse_setup_exit.py` | ✅ DEPLOYED — PF 4.27 → 5.26, MaxDD -5R |
+| `experiments/v88_exit_rl/11_regime_conditional_be.py` | ⚠️ small win on BTC (+8R, PF 4.27→4.44) — NOT deployed (user opted for v13 only) |
+| `experiments/v88_exit_rl/01..10,12_*.py` | ❌ All disproven on unseen — see README |
+| `experiments/v87_multi_head_exit/` | ❌ -674R on unseen, REMOVED 2026-05-08 |

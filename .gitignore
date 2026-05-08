@@ -36,6 +36,10 @@ data/setups_*_v72l.csv
 # Build artifacts from v6 Midas validation
 experiments/v6_xau_deploy/_v6_validated_raw.pkl
 data/v6_trades_holdout_xau.csv
+
+# v87/v88 forensic artifacts (regenerable from training scripts; large)
+experiments/v87_multi_head_exit/*.pkl
+data/ticks/
 gbpjpy/data/swing_v5_gbpjpy.csv
 gbpjpy/data/swing_GBPJPY_5m.csv
 gbpjpy/data/labeled_gbpjpy.csv

@@ -11,12 +11,17 @@ out-of-sample holdout.
 
 ## Quick Reference
 
-| Product | Asset | Entry | PF | WR | Trades | Bundle |
-|---|---|---|---|---|---|---|
-| **Oracle XAU** | XAUUSD | RL v84 | **4.21** | 70.2% | 1,207 | 4.8 MB |
-| **Oracle BTC** | BTCUSD | RL v84 | **3.82** | 67.9% | 1,135 | 4.8 MB |
-| **Midas XAU** | XAUUSD | Rules v83c | **5.25** | 73.4% | 1,693 | 31 MB |
-| **Janus XAU** | XAUUSD | Pivot-score | **1.85** | 58.3% | 892 | 5.3 MB |
+| Product | Asset | Entry | Exit | PF (unseen) | WR | Trades | Bundle |
+|---|---|---|---|---|---|---|---|
+| **Oracle XAU** | XAUUSD | RL v84 | trail + v88 reverse-setup | **4.54** ↑ | 70.2% | 1,207 | 4.8 MB |
+| **Oracle BTC** | BTCUSD | RL v84 | trail + v88 reverse-setup | **5.26** ↑ | 67.9% | 1,135 | 4.8 MB |
+| **Midas XAU** | XAUUSD | Rules v83c | trail + ML exit | **5.25** | 73.4% | 1,693 | 31 MB |
+| **Janus XAU** | XAUUSD | Pivot-score | 3-class scale-out | **1.85** | 58.3% | 892 | 5.3 MB |
+
+Oracle XAU/BTC PF jumped from 4.21/3.82 to 4.54/5.26 after deploying
+the v88 reverse-setup RL exit (commit `d1d22f1`, 2026-05-08). MaxDD
+also dropped 5R on each product. See "v88 Reverse-Setup RL Exit"
+section below.
 
 ---
 
@@ -50,6 +55,34 @@ the regime classifier detects a regime change.
 
 Backtested on live 2026-05-07 reversal: +244% PnL improvement (149.7R
 vs 43.5R without guard). See `state.py` → `DrawdownGuard`.
+
+### v88 Reverse-Setup RL Exit (Oracle XAU + BTC)
+Deployed 2026-05-08 (commit `d1d22f1`). At every in-trade bar, scans
+all 30 rule detectors for any *opposite-direction* setup. If one fires
+AND `q_entry[cid].predict(v72l_feats) > 0.10`, exit. The same RL that
+picks good entries is now flagging a high-quality setup against the
+open trade.
+
+Validated on the unseen 30% of v84 RL trades:
+- **Oracle XAU:** PF 4.18 → **4.54**, MaxDD 20R → **15R**
+- **Oracle BTC:** PF 4.27 → **5.26**, MaxDD 30R → **25R**
+
+This is the first positive result across 13 different exit-improvement
+experiments. Why it works while every other angle failed: q_entry is
+used as it was trained — only at bars where a rule pattern fires.
+Naive q_entry-on-every-bar destroyed PF (-413R XAU). See
+`experiments/v88_exit_rl/README.md` for the full disprove catalog.
+
+Implementation: see `decide_exit` in
+[`commercial/server/decision_engine/decide.py`](../../my-agents-and-website/commercial/server/decision_engine/decide.py).
+Latency: ~232ms per call (200-bar slice before rule scanning).
+Activates only when q_entry is loaded — silently skips Midas/Janus.
+
+### Removed v87 Multi-Head Exit
+v87's 4-head exit policy (giveback, upside, stop, new_high) was
+deployed in commit `496e7be` claiming +265R, but a proper unseen-window
+sweep (1470 combos) showed it destroyed -866R XAU / -674R BTC. Removed
+2026-05-08 commit `350f7b8`. See `experiments/v87_multi_head_exit/README.md`.
 
 ---
 
@@ -172,3 +205,6 @@ git push origin main
 | v84 RL Entry (Midas) | `experiments/v84_rl_entry/06_midas_rl.py` | PF ~2.0 ❌ |
 | v84 RL Exit | `experiments/v84_rl_entry/02_full_rl.py` | PF 3.85 (worse than ML exit) |
 | v84 Improved Exit | `experiments/v84_rl_entry/03_improved_exit.py` | PF 3.65 (worse) |
+| v87 Multi-Head Exit | `experiments/v87_multi_head_exit/` | ❌ -866R XAU / -674R BTC on unseen, REMOVED |
+| v88 Exit RL (12 angles) | `experiments/v88_exit_rl/` | 11/13 disproven; reverse-setup wins |
+| **v88 Reverse-Setup RL Exit** | `experiments/v88_exit_rl/13_reverse_setup_exit.py` | ✅ XAU PF +0.36, BTC PF +0.99, both DD lower, DEPLOYED |

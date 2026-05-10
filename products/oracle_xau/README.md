@@ -1,8 +1,8 @@
 # Oracle XAU — Flagship RL-Enhanced XAUUSD Model
 
-> **Version:** v84 entry + v88 reverse-setup exit
-> **Unseen-30% PF:** 4.54 (was 4.18 pre-v88 exit) | **WR:** 70.2% | **MaxDD:** 15R (was 20R)  
-> **Bundle:** `oracle_xau_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06 (entry) / 2026-05-08 (exit)
+> **Version:** v89 entry (maturity-aware) + v88 reverse-setup exit
+> **Holdout PF:** **6.44** (was 4.60 pre-v89) | **WR:** **77.4%** (was 71.4%) | **MaxDD:** **27R** (was 36R)  
+> **Bundle:** `oracle_xau_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06 (entry) / 2026-05-08 (v88 exit) / **2026-05-10 (v89 maturity-aware q_entry)**
 
 The premium-tier product. Uses 5 RL Q-functions (one per regime) to select
 entries, replacing the 28-rule hand-coded catalog. Two-stage confirmation:
@@ -16,7 +16,9 @@ per-regime confirm head → meta-labeling gate.
 |---|---|---|---|---|---|
 | v7.2 | Rule-based (28 rules) | 3.45 | 65.9% | 1,903 | Baseline Oracle |
 | v83c | Rule-based + filters | 4.18 | 69.1% | 1,487 | 4h regime + range filter + kill-switch |
-| **v84** | **RL Q-functions** | **4.21** | **70.2%** | **1,207** | **Q-learning replaces rules** |
+| v84 | RL Q-functions (V72L only) | 4.21 | 70.2% | 1,207 | Q-learning replaces rules |
+| v84 + v88 reverse-setup exit | (same entry, smarter exit) | 4.60 | 71.4% | 1,365 | Symmetric RL exit when opposite setup fires |
+| **v89 + v88** | **RL Q-functions (V72L + maturity)** | **6.44** | **77.4%** | **1,154** | **3 maturity features added; min_q 0.3→3.0** |
 
 ### v84 Holdout by Regime (2024-12-12 → 2026-05-01)
 
@@ -32,31 +34,48 @@ C0 + C3 carry 64% of trades and ~85% of total profit.
 
 ---
 
-## Architecture
+## Architecture (v89)
 
 ```
 M5 bar ──► K=5 regime selector (4h-step) ──► cid ∈ {0..4}
                        │
+            v89 NEW: compute 3 maturity features
+            stretch_100, stretch_200, pct_to_extreme_50
+                       │
                        ▼
               RL Q-function per regime
               XGBRegressor(300 trees, depth=4)
+              INPUT: V72L (18) + maturity (3) = 21 features
               predicts expected PnL in R multiples
                        │
-                  Q > 0.3R ?
+                  Q > 3.0R ?  (v89 calibrated; was Q>0.3 in v84)
                        │ YES
                        ▼
               Per-regime confirm head
               XGBClassifier(200 trees, depth=3)
+              INPUT: V72L (18 features) — unchanged
               P(win | entry) ≥ threshold ?
                        │ YES
                        ▼
               Meta gate
               XGBClassifier(300 trees, depth=4)
+              INPUT: V72L + direction + cid (20) — unchanged
               P(win | features, cid, dir) ≥ 0.775 ?
                        │ YES
                        ▼
                     OPEN TRADE
 ```
+
+### v89 Maturity Features (the key v84→v89 change)
+
+Three direction-signed features capture *trend extension*:
+- `stretch_100` — ATRs above 100-bar low (long) / below 100-bar high (short)
+- `stretch_200` — same on 200-bar window
+- `pct_to_extreme_50` — position within last 50-bar range (0 = opposite extreme, 1 = at top of recent rally / bottom of selloff)
+
+These prevent the RL from entering at the *top of an extended rally* or *bottom of an extended selloff* — entries that look like clean pullbacks but are actually trend-reversal points.
+
+**Disprove evidence:** at `q>3.0`, % of trades with `stretch_100 > 10 ATRs` drops from 14.1% (v84) → **8.7%** (v89), a 38% reduction in stretched-leg entries.
 
 ## Exit Logic (v88, deployed 2026-05-08)
 

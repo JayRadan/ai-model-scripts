@@ -11,17 +11,22 @@ out-of-sample holdout.
 
 ## Quick Reference
 
-| Product | Asset | Entry | Exit | PF (unseen) | WR | Trades | Bundle |
+| Product | Asset | Entry | Exit | PF (holdout) | WR | MaxDD | Bundle |
 |---|---|---|---|---|---|---|---|
-| **Oracle XAU** | XAUUSD | RL v84 | trail + v88 reverse-setup | **4.54** ↑ | 70.2% | 1,207 | 4.8 MB |
-| **Oracle BTC** | BTCUSD | RL v84 | trail + v88 reverse-setup | **5.26** ↑ | 67.9% | 1,135 | 4.8 MB |
-| **Midas XAU** | XAUUSD | Rules v83c | trail + ML exit | **5.25** | 73.4% | 1,693 | 31 MB |
-| **Janus XAU** | XAUUSD | Pivot-score | 3-class scale-out | **1.85** | 58.3% | 892 | 5.3 MB |
+| **Oracle XAU** | XAUUSD | RL v89 (V72L+maturity) | trail + v88 reverse-setup | **6.44** ↑↑ | **77.4%** | **27R** | 4.8 MB |
+| **Oracle BTC** | BTCUSD | RL v89 (V72L+maturity) | trail + v88 reverse-setup | **5.27** ↑↑ | **75.1%** | **36R** | 4.8 MB |
+| **Midas XAU** | XAUUSD | Rules v83c | trail + ML exit | **5.25** | 73.4% | n/a | 31 MB |
+| **Janus XAU** | XAUUSD | Pivot-score | 3-class scale-out | **1.85** | 58.3% | n/a | 5.3 MB |
 
-Oracle XAU/BTC PF jumped from 4.21/3.82 to 4.54/5.26 after deploying
-the v88 reverse-setup RL exit (commit `d1d22f1`, 2026-05-08). MaxDD
-also dropped 5R on each product. See "v88 Reverse-Setup RL Exit"
-section below.
+Evolution of Oracle PF/DD on the post-2024-12-12 holdout:
+
+| Step | Date | XAU PF | XAU DD | BTC PF | BTC DD |
+|---|---|---|---|---|---|
+| v84 RL entry only | 2026-05-06 | 4.21 | 20R | 3.82 | 30R |
+| + v88 reverse-setup exit | 2026-05-08 | 4.60 | 36R | 4.69 | 43R |
+| + v89 maturity-aware q_entry | **2026-05-10** | **6.44** | **27R** | **5.27** | **36R** |
+
+Each step is a clean improvement (commits `d1d22f1` → `308947c` → `7cb5a8f` on `JayRadan/edge_predictor:main`).
 
 ---
 
@@ -55,6 +60,35 @@ the regime classifier detects a regime change.
 
 Backtested on live 2026-05-07 reversal: +244% PnL improvement (149.7R
 vs 43.5R without guard). See `state.py` → `DrawdownGuard`.
+
+### v89 Maturity-Aware q_entry (Oracle XAU + BTC)
+Deployed 2026-05-10 (commit `7cb5a8f`). Adds 3 direction-signed trend-maturity
+features to the q_entry input:
+
+- `stretch_100` — ATRs above 100-bar low (long) / below 100-bar high (short)
+- `stretch_200` — same on 200-bar window
+- `pct_to_extreme_50` — position within last 50-bar range (0 = opposite extreme, 1 = at top of recent rally / bottom of selloff)
+
+This prevents the RL from entering pullbacks at the *top of an extended rally*
+or *bottom of an extended selloff* — trades that look like clean entries but
+are actually at trend-exhaustion / reversal points.
+
+Validated on the post-2024-12-12 holdout through full prod pipeline (q_entry
+→ confirm → meta@0.775 → simulate w/ v88+trail+SL+max60 → kill-switch):
+
+| | Oracle XAU | Oracle BTC |
+|---|---|---|
+| v84 + v88 (pre-v89): | PF 4.60, DD 36R, WR 71.4% | PF 4.69, DD 43R, WR 72.0% |
+| **v89 + v88 (current):** | **PF 6.44, DD 27R, WR 77.4%** | **PF 5.27, DD 36R, WR 75.1%** |
+| Δ | +1.84 PF, -9R DD, +6.0pp WR | +0.58 PF, -7R DD, +3.1pp WR |
+
+Stretched-entry exposure cut **38% on XAU, 36% on BTC** — at `q>3.0` the
+share of trades opened with `stretch_100 > 10 ATRs` drops from 14.1%→8.7%
+(XAU) and 18.3%→11.8% (BTC).
+
+q_entry input dim: 18 (V72L) → **21** (V72L + 3 maturity).
+`MIN_Q` recalibrated: **0.3 → 3.0** (the new q_entry's distribution shifted).
+Confirm + meta heads unchanged. See `experiments/v89_smart_exit/README.md`.
 
 ### v88 Reverse-Setup RL Exit (Oracle XAU + BTC)
 Deployed 2026-05-08 (commit `d1d22f1`). At every in-trade bar, scans

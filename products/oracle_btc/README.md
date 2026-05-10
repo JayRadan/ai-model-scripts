@@ -1,8 +1,8 @@
 # Oracle BTC — RL-Enhanced BTCUSD Model
 
-> **Version:** v84 entry + v88 reverse-setup exit
-> **Unseen-30% PF:** 5.26 (was 4.27 pre-v88 exit) | **WR:** 67.9% | **MaxDD:** 25R (was 30R)  
-> **Bundle:** `oracle_btc_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06 (entry) / 2026-05-08 (exit)
+> **Version:** v89 entry (maturity-aware) + v88 reverse-setup exit
+> **Holdout PF:** **5.27** (was 4.69 pre-v89) | **WR:** **75.1%** (was 72.0%) | **MaxDD:** **36R** (was 43R)  
+> **Bundle:** `oracle_btc_validated.pkl` (4.8 MB) | **Deployed:** 2026-05-06 (entry) / 2026-05-08 (v88 exit) / **2026-05-10 (v89 maturity-aware q_entry)**
 
 Same v72l architecture as Oracle XAU, but trained on Bitcoin M5 data with
 its own BTC-specific regime selector (K=5, full_directional relabel).
@@ -17,7 +17,9 @@ of any product (+0.79 over rule-based).
 |---|---|---|---|---|---|
 | v7.2 | Rule-based (28 rules) | 2.85 | 61.8% | 1,899 | Baseline BTC |
 | v83c | Rule-based + filters | 3.03 | 64.4% | 1,033 | 4h regime + range filter + kill-switch |
-| **v84** | **RL Q-functions** | **3.82** | **67.9%** | **1,135** | **Q-learning replaces rules (+0.79!)** |
+| v84 | RL Q-functions (V72L only) | 3.82 | 67.9% | 1,135 | Q-learning replaces rules |
+| v84 + v88 reverse-setup exit | (same entry, smarter exit) | 4.69 | 72.0% | 1,127 | Symmetric RL exit when opposite setup fires |
+| **v89 + v88** | **RL Q-functions (V72L + maturity)** | **5.27** | **75.1%** | **1,373** | **3 maturity features added; min_q 0.3→3.0** |
 
 ### v84 Holdout by Regime
 
@@ -103,20 +105,36 @@ rule-based trades.
 
 ---
 
-## Bundle Structure
+## Bundle Structure (v89)
 
 ```python
 {
-    'q_entry': {0: XGBRegressor, ..., 4: XGBRegressor},  # 5 Q-models
-    'mdls': {(0,'RL'): XGBClassifier, ..., (4,'RL'): XGBClassifier},
-    'thrs': {(0,'RL'): 0.50, ...},
-    'exit_mdl': XGBClassifier,
-    'meta_mdl': XGBClassifier,
-    'meta_threshold': 0.525,     # BTC-specific (lower than XAU's 0.775)
-    'min_q': 0.3,
-    'version': 'v84-rl-btc',
+    'q_entry': {0..4: XGBRegressor},      # 5 Q-models, INPUT 21 feats (V72L+maturity)
+    'q_entry_features': [...18 V72L..., 'stretch_100', 'stretch_200', 'pct_to_extreme_50'],
+    'v89_maturity': True,                  # marker
+    'mdls': {(0..4,'RL'): XGBClassifier},  # confirm heads, V72L only (unchanged)
+    'thrs': {(0..4,'RL'): 0.50, ...},
+    'exit_mdl': XGBClassifier,             # binary ML exit, EXIT_FEATS (unchanged)
+    'meta_mdl': XGBClassifier,             # meta gate, V72L+dir+cid (unchanged)
+    'meta_threshold': 0.775,
+    'version': 'v89-mat-btc',
 }
 ```
+
+The v89 change is **only** to q_entry. Confirm and meta heads were validated to handle the new q_entry distribution natively without retraining (script 12/13 full-pipeline test).
+
+---
+
+## v89 Maturity Features (the v84→v89 change)
+
+Three direction-signed features capture *trend extension*, computed from price history at entry time:
+- `stretch_100` — ATRs above 100-bar low (long) / below 100-bar high (short)
+- `stretch_200` — same on 200-bar window
+- `pct_to_extreme_50` — position within last 50-bar range, 0 = opposite extreme, 1 = at top of recent rally / bottom of selloff
+
+These prevent entries at *the top of an extended rally* / *bottom of an extended selloff* — entries that look like clean pullbacks but are actually at trend exhaustion / reversal points.
+
+**Disprove evidence (BTC):** at `q>3.0`, % of trades with `stretch_100 > 10 ATRs` drops 18.3% (v84) → **11.8%** (v89), a 36% reduction in stretched-leg entries.
 
 ---
 
@@ -125,7 +143,7 @@ rule-based trades.
 ### Server config (`configs/oracle_btc.py`)
 ```python
 rl_entry_mode: bool = True
-rl_min_q: float = 0.3
+rl_min_q: float = 3.0   # v89 calibrated; v84 was 0.3
 regime_selector_json: str = "regime_selector_btc_4h.json"
 kill_switch_losses: int = 3
 range_filter_lookback: int = 20

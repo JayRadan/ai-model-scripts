@@ -13,10 +13,12 @@ out-of-sample holdout.
 
 | Product | Asset | Entry | Exit | PF (holdout) | WR | MaxDD | Bundle |
 |---|---|---|---|---|---|---|---|
-| **Oracle XAU** | XAUUSD | RL v89 (V72L+maturity) | trail + v88 reverse-setup | **6.44** ↑↑ | **77.4%** | **27R** | 4.8 MB |
-| **Oracle BTC** | BTCUSD | RL v89 (V72L+maturity) | trail + v88 reverse-setup | **5.27** ↑↑ | **75.1%** | **36R** | 4.8 MB |
-| **Midas XAU** | XAUUSD | Rules v83c | trail + ML exit | **5.25** | 73.4% | n/a | 31 MB |
-| **Janus XAU** | XAUUSD | Pivot-score | 3-class scale-out | **1.85** | 58.3% | n/a | 5.3 MB |
+| **Oracle XAU** | XAUUSD | RL v89 (V72L+maturity) | trail + v88 reverse-setup | **6.44** | **77.4%** | **27R** | 5.6 MB |
+| **Oracle BTC** | BTCUSD | RL v89 (V72L+maturity) | trail + v88 reverse-setup | **5.27** | **75.1%** | **36R** | 5.7 MB |
+
+> Midas XAU and Janus XAU were retired 2026-05-11 — customers notified.
+> Files in this folder and on the server were removed in the same commit
+> sequence as the Oracle v89 deploy.
 
 Evolution of Oracle PF/DD on the post-2024-12-12 holdout:
 
@@ -50,7 +52,6 @@ than the original bar-by-bar classification.
 Replaces 28-rule catalog with 5 XGBRegressor Q-functions. PF gains:
 - Oracle XAU: +0.03 PF, +101 more trades
 - Oracle BTC: +0.79 PF, +102 more trades
-- Midas: attempted but failed (14 features insufficient)
 
 ### v85 Equity Drawdown Circuit Breaker (all products)
 Prevents giving back profits during sharp reversals. Tracks cumulative
@@ -110,7 +111,7 @@ Naive q_entry-on-every-bar destroyed PF (-413R XAU). See
 Implementation: see `decide_exit` in
 [`commercial/server/decision_engine/decide.py`](../../my-agents-and-website/commercial/server/decision_engine/decide.py).
 Latency: ~232ms per call (200-bar slice before rule scanning).
-Activates only when q_entry is loaded — silently skips Midas/Janus.
+Activates only when q_entry is loaded.
 
 ### Removed v87 Multi-Head Exit
 v87's 4-head exit policy (giveback, upside, stop, new_high) was
@@ -127,9 +128,7 @@ products/
 ├── README.md                     ← THIS FILE
 ├── models/                       ← All .pkl bundles (gitignored, on disk)
 │   ├── oracle_xau_validated.pkl
-│   ├── oracle_btc_validated.pkl
-│   ├── midas_xau_validated.pkl
-│   └── janus_xau_validated.pkl
+│   └── oracle_btc_validated.pkl
 ├── _shared/                      ← Cross-product infrastructure
 │   ├── regime_selector_xau.json
 │   ├── regime_selector_btc.json
@@ -147,29 +146,15 @@ products/
 │       ├── 03_train_rl_entry.py        ← RL Q-learning entry
 │       ├── 04_full_rl_exit.py          ← RL exit (experimental)
 │       └── 05_deploy_bundle.py         ← Deploy to server
-├── oracle_btc/                   ← BTC RL model
-│   ├── README.md
-│   ├── train_rl_entry.py
-│   └── scripts/
-│       ├── 01_validate_v72l.py
-│       ├── 02_train_export.py
-│       ├── 02b_build_selector.py       ← BTC K=5 regime selector
-│       ├── 03_v83c_pipeline.py         ← v83c range filter + kill-switch
-│       └── 04_train_rl_entry.py
-├── midas_xau/                    ← Entry-level rule-based
-│   ├── README.md
-│   └── scripts/
-│       └── 01_validate_v6.py           ← v6 (14-feature) training
-└── janus_xau/                    ← Pivot-score experimental
+└── oracle_btc/                   ← BTC RL model
     ├── README.md
-    ├── models/
+    ├── train_rl_entry.py
     └── scripts/
-        ├── 00_compute_features.py
-        ├── 01_label_bars.py
-        ├── 02_train_pivot.py
-        ├── 03_build_setups.py
-        ├── 04_validate.py
-        └── 05_pickle_janus.py
+        ├── 01_validate_v72l.py
+        ├── 02_train_export.py
+        ├── 02b_build_selector.py       ← BTC K=5 regime selector
+        ├── 03_v83c_pipeline.py         ← v83c range filter + kill-switch
+        └── 04_train_rl_entry.py
 ```
 
 ---
@@ -214,8 +199,6 @@ python3 products/oracle_xau/train_rl_entry.py
 
 # Oracle BTC (RL)
 python3 products/oracle_btc/train_rl_entry.py
-
-# Midas retraining — see experiments/v83_range_position_filter/
 ```
 
 ### 3. Deploy
@@ -236,9 +219,10 @@ git push origin main
 | v83c range filter + kill-switch | `experiments/v83_range_position_filter/` | +0.5-2.7 PF across products |
 | v84 RL Entry (XAU) | `experiments/v84_rl_entry/01_q_learning.py` | PF 4.21 ✅ |
 | v84 RL Entry (BTC) | `experiments/v84_rl_entry/07_btc_rl.py` | PF 3.82 ✅ |
-| v84 RL Entry (Midas) | `experiments/v84_rl_entry/06_midas_rl.py` | PF ~2.0 ❌ |
 | v84 RL Exit | `experiments/v84_rl_entry/02_full_rl.py` | PF 3.85 (worse than ML exit) |
 | v84 Improved Exit | `experiments/v84_rl_entry/03_improved_exit.py` | PF 3.65 (worse) |
 | v87 Multi-Head Exit | `experiments/v87_multi_head_exit/` | ❌ -866R XAU / -674R BTC on unseen, REMOVED |
 | v88 Exit RL (12 angles) | `experiments/v88_exit_rl/` | 11/13 disproven; reverse-setup wins |
 | **v88 Reverse-Setup RL Exit** | `experiments/v88_exit_rl/13_reverse_setup_exit.py` | ✅ XAU PF +0.36, BTC PF +0.99, both DD lower, DEPLOYED |
+| **v89 Maturity-Aware q_entry** | `experiments/v89_smart_exit/11_retrain_q_with_maturity.py` | ✅ XAU PF 4.60→6.44 / DD 36→27R, BTC PF 4.69→5.27 / DD 43→36R, DEPLOYED 2026-05-10 |
+| **Janus + Midas removal** | (this commit) | 2026-05-11: products retired entirely from server/products/website |

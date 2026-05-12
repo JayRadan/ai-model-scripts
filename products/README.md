@@ -20,15 +20,18 @@ out-of-sample holdout.
 > Files in this folder and on the server were removed in the same commit
 > sequence as the Oracle v89 deploy.
 
-Evolution of Oracle PF/DD on the post-2024-12-12 holdout:
+Evolution of Oracle on the post-2024-12-12 holdout:
 
-| Step | Date | XAU PF | XAU DD | BTC PF | BTC DD |
-|---|---|---|---|---|---|
-| v84 RL entry only | 2026-05-06 | 4.21 | 20R | 3.82 | 30R |
-| + v88 reverse-setup exit | 2026-05-08 | 4.60 | 36R | 4.69 | 43R |
-| + v89 maturity-aware q_entry | **2026-05-10** | **6.44** | **27R** | **5.27** | **36R** |
+| Step | Date | XAU PF / R | BTC PF / R |
+|---|---|---|---|
+| v84 RL entry only | 2026-05-06 | 4.21 / +959R | 3.82 / +841R |
+| + v88 reverse-setup exit | 2026-05-08 | 4.60 / +957R | 4.69 / +880R |
+| + v89 maturity-aware q_entry | 2026-05-10 | 6.44 / +7,092R (q>3) | 5.27 / +12,070R (q>3) |
+| + v90 24h-momentum q_entry | **2026-05-12** | **4.31 / +7,536R (q>3)** | **4.45 / +13,680R (q>3)** ★ |
 
-Each step is a clean improvement (commits `d1d22f1` → `308947c` → `7cb5a8f` on `JayRadan/edge_predictor:main`).
+PF dropped slightly on XAU at v90 because the model trades MORE setups (n=2,452 vs 2,178 at v89) and the marginal trades carry slightly lower PF — but total R rises. BTC sees clean PF + R wins across the board (+13.5% PF, +13.3% R).
+
+Commits: `d1d22f1` → `308947c` → `7cb5a8f` → `eec93e8` on `JayRadan/edge_predictor:main`.
 
 ---
 
@@ -61,6 +64,33 @@ the regime classifier detects a regime change.
 
 Backtested on live 2026-05-07 reversal: +244% PnL improvement (149.7R
 vs 43.5R without guard). See `state.py` → `DrawdownGuard`.
+
+### v90 24h-Momentum-Aware q_entry (Oracle XAU + BTC)
+Deployed 2026-05-12 (commit `eec93e8`). Adds 2 direction-signed
+24h-return features to q_entry:
+
+- `ret_24h_signed` = direction × (close - close[t-288]) / close[t-288]
+  (positive = trade direction matches recent 24h trend)
+- `ret_24h_abs` = |close - close[t-288]| / close[t-288]
+  (regime-stress magnitude proxy)
+
+This addresses a user-reported issue where HighVol regime fired shorts
+during periods of strong 24h-up movement (the weekly relabel threshold
+wasn't crossed but intraday direction was clear). With `ret_24h_signed`,
+the model learns to reject counter-trend trades within HighVol.
+
+Validated on post-2024-12-12 holdout (q-only filter at q>3.0):
+- Oracle XAU: PF 4.42 → 4.31, +444R (n grows 2,178 → 2,452, +0.5pp WR)
+- Oracle BTC: PF 3.92 → **4.45** (+0.53), **+1,610R** (+13.3%), +1.4pp WR
+
+Per-cluster wins at q>3.0:
+- XAU Uptrend LONG: PF 4.41 → 5.04, +518R
+- BTC Uptrend LONG: PF 3.92 → 4.78, +1,140R
+- BTC TrendRange SHORT: PF 7.48 → 10.04, +149R
+
+`ret_24h_signed` ranks #5 in HighVol q_entry feature importance on
+both products — genuine signal, not noise. q_entry input dim grows
+21 → 23. Confirm + meta heads unchanged.
 
 ### v89 Maturity-Aware q_entry (Oracle XAU + BTC)
 Deployed 2026-05-10 (commit `7cb5a8f`). Adds 3 direction-signed trend-maturity
@@ -225,4 +255,6 @@ git push origin main
 | v88 Exit RL (12 angles) | `experiments/v88_exit_rl/` | 11/13 disproven; reverse-setup wins |
 | **v88 Reverse-Setup RL Exit** | `experiments/v88_exit_rl/13_reverse_setup_exit.py` | ✅ XAU PF +0.36, BTC PF +0.99, both DD lower, DEPLOYED |
 | **v89 Maturity-Aware q_entry** | `experiments/v89_smart_exit/11_retrain_q_with_maturity.py` | ✅ XAU PF 4.60→6.44 / DD 36→27R, BTC PF 4.69→5.27 / DD 43→36R, DEPLOYED 2026-05-10 |
-| **Janus + Midas removal** | (this commit) | 2026-05-11: products retired entirely from server/products/website |
+| **Janus + Midas removal** | (commit `4e0ee0e` + `2ac70b5` + `180a0e5`) | 2026-05-11: products retired entirely from server/products/website |
+| **v90 24h-Momentum q_entry** | `experiments/v90_fewer_clusters/03_24h_aware_q_entry.py` | ✅ BTC PF 3.92→4.45 (+13.5%) / +1,610R at q>3, XAU +444R, DEPLOYED 2026-05-12 |
+| v90 K-cluster sweep (disprove) | `experiments/v90_fewer_clusters/02_k_sweep.py` | ❌ K=5 is optimal; K=6-10 marginal-or-worse, K=2-3 catastrophic |

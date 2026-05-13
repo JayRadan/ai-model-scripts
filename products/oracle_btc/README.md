@@ -1,8 +1,8 @@
 # Oracle BTC — RL-Enhanced BTCUSD Model
 
-> **Version:** v90 entry (maturity + 24h-momentum) + v88 reverse-setup exit
-> **Holdout PF (q>3, q-only):** **4.45** (was 3.92 at v89; +13.5%) | **WR:** **73.4%** | **MaxDD:** ~36R  
-> **Bundle:** `oracle_btc_validated.pkl` | **Deployed:** v84 2026-05-06 → v88 2026-05-08 → v89 2026-05-10 → **v90 2026-05-12**
+> **Version:** v90 entry + v88 reverse-setup exit + **v97 wider hard SL (6 ATR)**
+> **Holdout PF (q>3):** **5.43** at v97 (was 4.45 at SL=4) | **WR:** **73.4%** | **+15,264R**
+> **Bundle:** `oracle_btc_validated.pkl` | **Deployed:** v84 2026-05-06 → v88 2026-05-08 → v89 2026-05-10 → v90 2026-05-12 → **v97 2026-05-13**
 
 Same v72l architecture as Oracle XAU, but trained on Bitcoin M5 data with
 its own BTC-specific regime selector (K=5, full_directional relabel).
@@ -20,7 +20,8 @@ of any product (+0.79 over rule-based).
 | v84 | RL Q-functions (V72L only) | 3.82 | 67.9% | 1,135 | Q-learning replaces rules |
 | v84 + v88 reverse-setup exit | (same entry, smarter exit) | 4.69 | 72.0% | 1,127 | Symmetric RL exit when opposite setup fires |
 | v89 + v88 | RL Q-functions (V72L + maturity) | 5.27 | 75.1% | 1,373 | 3 maturity features added; min_q 0.3→3.0 |
-| **v90 + v88** | **RL Q-functions (V72L + maturity + 24h-mom)** | **4.45** ★ | **73.4%** | **4,325** | **2 direction-signed 24h-return features added; +13.5% PF / +13.3% R at q>3** |
+| v90 + v88 | RL Q-functions (V72L + maturity + 24h-mom) | 4.45 | 73.4% | 4,325 | 2 direction-signed 24h-return features added; +13.5% PF / +13.3% R at q>3 |
+| **v97 (v90 + v88, SL widened 4→6 ATR)** | (same model, looser stop) | **5.43** ★ | **73.4%** | **4,325** | **+1,585R / +12% PF — 56% of 4-ATR stops were being hunted (recovered within 60 bars)** |
 
 ### v84 Holdout by Regime
 

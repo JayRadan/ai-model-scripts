@@ -1,6 +1,6 @@
 # Edge Predictor — Production Model Catalog
 
-> **Last updated:** 2026-05-06  
+> **Last updated:** 2026-05-13  
 > **GitHub:** `JayRadan/edge_predictor` (auto-deploys to Render on push to `main`)
 
 Four production trading models for XAUUSD and BTCUSD (M5 timeframe).
@@ -27,11 +27,14 @@ Evolution of Oracle on the post-2024-12-12 holdout:
 | v84 RL entry only | 2026-05-06 | 4.21 / +959R | 3.82 / +841R |
 | + v88 reverse-setup exit | 2026-05-08 | 4.60 / +957R | 4.69 / +880R |
 | + v89 maturity-aware q_entry | 2026-05-10 | 6.44 / +7,092R (q>3) | 5.27 / +12,070R (q>3) |
-| + v90 24h-momentum q_entry | **2026-05-12** | **4.31 / +7,536R (q>3)** | **4.45 / +13,680R (q>3)** ★ |
+| + v90 24h-momentum q_entry | 2026-05-12 | 4.31 / +7,536R (q>3) | 4.45 / +13,680R (q>3) |
+| **+ v97 wider hard SL (4→6 ATR)** | **2026-05-13** | **5.04 / +8,286R (q>3)** | **5.43 / +15,264R (q>3)** ★ |
 
 PF dropped slightly on XAU at v90 because the model trades MORE setups (n=2,452 vs 2,178 at v89) and the marginal trades carry slightly lower PF — but total R rises. BTC sees clean PF + R wins across the board (+13.5% PF, +13.3% R).
 
-Commits: `d1d22f1` → `308947c` → `7cb5a8f` → `eec93e8` on `JayRadan/edge_predictor:main`.
+v97 widens the hard SL after a stop-hunt diagnostic showed ~56% of 4-ATR stops would recover within 60 bars on the holdout. No model retraining; pure exit-policy change.
+
+Commits: `d1d22f1` → `308947c` → `7cb5a8f` → `eec93e8` → `5816fbc` on `JayRadan/edge_predictor:main`.
 
 ---
 
@@ -64,6 +67,75 @@ the regime classifier detects a regime change.
 
 Backtested on live 2026-05-07 reversal: +244% PnL improvement (149.7R
 vs 43.5R without guard). See `state.py` → `DrawdownGuard`.
+
+### v97 Wider Hard SL (Oracle XAU + BTC)
+Deployed 2026-05-13 (commit `5816fbc`). Pure config change — `sl_hard_atr` widened
+from **4.0 → 6.0** in both `oracle_xau.py` and `oracle_btc.py`. **No model retrain,
+no EA redistribution.**
+
+**Root cause** (diagnostic at `experiments/v91_smart_regime/07_sl_hunt_check.py`):
+on the holdout, **~56% of 4-ATR stops recovered the full 4R within 60 bars** — a
+textbook stop-hunt / liquidity-sweep pattern. Median post-SL favorable move at
+60 bars: +4.61R XAU / +4.62R BTC. 87% of stops saw at least +1R recovery.
+
+**Validated** via full holdout PnL replay (`08_wider_sl_pnl.py`) — every q-threshold
+on both products, no exception:
+
+| Product | min_q | SL=-4 (was) | SL=-6 (deployed) | Δ R |
+|---|---|---|---|---|
+| Oracle XAU | 0.5 | PF 2.90, +19,342R | PF 3.19, +21,278R | **+1,936** |
+| Oracle XAU | 1.0 | PF 3.23, +17,308R | PF 3.61, +19,022R | **+1,714** |
+| Oracle XAU | 2.0 | PF 3.69, +12,206R | PF 4.17, +13,370R | **+1,164** |
+| **Oracle XAU** | **3.0** | **PF 4.31, +7,536R** | **PF 5.04, +8,286R** | **+750** |
+| Oracle BTC | 0.5 | PF 2.64, +29,473R | PF 2.99, +33,372R | **+3,899** |
+| Oracle BTC | 1.0 | PF 2.96, +28,039R | PF 3.37, +31,437R | **+3,398** |
+| Oracle BTC | 2.0 | PF 3.53, +20,730R | PF 4.12, +23,195R | **+2,465** |
+| **Oracle BTC** | **3.0** | **PF 4.45, +13,680R** | **PF 5.43, +15,264R** | **+1,585** |
+
+**Tradeoffs**:
+- Per-trade max loss is 1.5× larger in absolute price terms. To keep dollar-risk
+  per trade constant, halve lot size (XAU 0.05→0.033, BTC 0.10→0.067).
+- Trail stop activation R-units now equal 18×ATR profit (was 12×ATR). Fewer trades
+  reach trail-activation; backtest already accounts for this in totals.
+- Exit head (`p_exit`) sees `unrealized_pnl_R` scaled 0.67× smaller → fires less
+  often → trades run longer → behaviour converges toward backtest (which had no
+  exit-head firing). Net PnL impact: positive.
+
+EA: no change required. The connector reads `sl_atr_mult` from each `/decide`
+response (server now sends 6.0). **Customer EAs are not redistributed.**
+
+### Why other regime-fix paths were disproven (chart-staleness investigation)
+A chart screenshot 2026-05-12 showed regime label = Uptrend during a clearly
+bearish day — followed by a losing long. Five independent investigations sought
+the cause; **none of the regime-routing fixes survived holdout validation**, but
+the diagnostic surfaced the SL-hunt issue (above) which DID:
+
+| Experiment | Approach | Holdout result | Verdict |
+|---|---|---|---|
+| `v92_supervised_regime/` | XGB trained to predict next-12h regime from current features | XAU: at conf>0.30, "Up" → mean fwd return **-0.20%** (anti-edge); BTC ~random at every threshold | ❌ Forward direction unpredictable |
+| `v95_regime_repaint_ab/` | Bar-level A/B: block-aligned vs trailing-window K-means | XAU 40% disagree, BTC 65% disagree — staleness real | (informational only) |
+| `v91/03_validate_trading_impact.py` | Naive flip to trailing cluster routing through current q_entry | XAU **-401R**, BTC **-1,030R** at q>3 | ❌ q_entry trained on block-aligned cids |
+| `v91/04_trailing_trade_replay.py` | Subsample replay of (3) | XAU **-401R** confirmed | ❌ |
+| `v91/05_full_pipeline_trailing.py` | Full retrain: q_entry refit on trailing cids | XAU **still -185R** vs prod at q>3 | ❌ Stale label is the right contract |
+| `v91/06_momentum_veto.py` | Veto longs when regime=Up but 24h ret < -threshold | XAU **-1,569R**, BTC **-2,750R** at v=0.5%, q>3 | ❌ Kills the system's BEST trades (Up-fade-pullback pattern) |
+| `v91/07_sl_hunt_check.py` | Diagnostic — what does price do AFTER SL hits? | **56% recover 4R in 60 bars** | ✅ Found the real issue |
+| `v91/08_wider_sl_pnl.py` | Full PnL replay at SL = -4, -5, -6, -8, -10 | +750R XAU / +1,585R BTC at -6 | ✅ DEPLOYED as v97 |
+
+**Lesson:** the "stale-looking" K-means regime label is part of how the system
+makes money — block-trained q_entry has learned to handle it. Don't flip to
+trailing without rebuilding the entire training pipeline (and even that lost
+money on the 2024-12-12+ holdout). The actual cost of the user-reported losing
+trade was the broker stop being hunted, not a regime mislabel.
+
+**Live chart "repainting" (cosmetic only):** the chart endpoint
+(`/admin/regime/_regime-chart`) recomputes historical labels each load,
+which can shift past blocks if the live bar grid changes (Dukascopy
+backfills). Anchoring via `funnel_log.persist_regime_for_bar` works
+correctly but the SQLite DB on Render's default storage is wiped on
+deploy → anchors lost → repainting visible again. Fix is one of:
+mount a Render persistent disk, switch to Postgres, or fix the root
+cause in `_extrapolated_boundaries` (none deployed yet — purely cosmetic,
+production trading is unaffected).
 
 ### v90 24h-Momentum-Aware q_entry (Oracle XAU + BTC)
 Deployed 2026-05-12 (commit `eec93e8`). Adds 2 direction-signed
@@ -258,3 +330,10 @@ git push origin main
 | **Janus + Midas removal** | (commit `4e0ee0e` + `2ac70b5` + `180a0e5`) | 2026-05-11: products retired entirely from server/products/website |
 | **v90 24h-Momentum q_entry** | `experiments/v90_fewer_clusters/03_24h_aware_q_entry.py` | ✅ BTC PF 3.92→4.45 (+13.5%) / +1,610R at q>3, XAU +444R, DEPLOYED 2026-05-12 |
 | v90 K-cluster sweep (disprove) | `experiments/v90_fewer_clusters/02_k_sweep.py` | ❌ K=5 is optimal; K=6-10 marginal-or-worse, K=2-3 catastrophic |
+| v92 supervised regime (disprove) | `experiments/v92_supervised_regime/02_train_classifier.py` | ❌ XAU "Up" conf>0.30 → mean fwd ret -0.20%; BTC random — forward direction unpredictable |
+| v95 trailing K-means A/B | `commercial/experiments/v95_regime_repaint_ab/run_ab_fast.py` | (info) XAU 40% / BTC 65% bars disagree with block-aligned label |
+| v91 trailing trade replay (disprove) | `experiments/v91_smart_regime/04_trailing_trade_replay.py` | ❌ XAU -401R / BTC -1,030R at q>3 — q_entry trained on block-aligned cids |
+| v91 full pipeline retrain (disprove) | `experiments/v91_smart_regime/05_full_pipeline_trailing.py` | ❌ XAU still -185R after retraining q_entry on trailing labels |
+| v91 momentum-disagreement veto (disprove) | `experiments/v91_smart_regime/06_momentum_veto.py` | ❌ XAU -1,569R / BTC -2,750R — veto kills system's best trades |
+| **v91 SL-hunt diagnostic** | `experiments/v91_smart_regime/07_sl_hunt_check.py` | ✅ 56% of 4-ATR stops recover 4R within 60 bars — found root cause |
+| **v97 wider hard SL** | `experiments/v91_smart_regime/08_wider_sl_pnl.py` | ✅ XAU PF 4.31→5.04 / +750R, BTC PF 4.45→5.43 / +1,585R at q>3, DEPLOYED 2026-05-13 |

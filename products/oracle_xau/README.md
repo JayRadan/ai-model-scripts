@@ -1,8 +1,8 @@
 # Oracle XAU — Flagship RL-Enhanced XAUUSD Model
 
-> **Version:** v90 entry (maturity + 24h-momentum) + v88 reverse-setup exit
-> **Holdout PF:** **6.44–4.31** (depends on filter) | **WR:** **74-77%** | **MaxDD:** ~27R  
-> **Bundle:** `oracle_xau_validated.pkl` | **Deployed:** v84 2026-05-06 → v88 2026-05-08 → v89 2026-05-10 → **v90 2026-05-12**
+> **Version:** v90 entry (maturity + 24h-momentum) + v88 reverse-setup exit + **v97 wider hard SL (6 ATR)**
+> **Holdout PF:** **5.04** at q>3 with v97 SL=6 ATR (was 4.31 at SL=4) | **WR:** **74.1%** | **+8,286R**
+> **Bundle:** `oracle_xau_validated.pkl` | **Deployed:** v84 2026-05-06 → v88 2026-05-08 → v89 2026-05-10 → v90 2026-05-12 → **v97 2026-05-13**
 
 The premium-tier product. Uses 5 RL Q-functions (one per regime) to select
 entries, replacing the 28-rule hand-coded catalog. Two-stage confirmation:
@@ -19,7 +19,8 @@ per-regime confirm head → meta-labeling gate.
 | v84 | RL Q-functions (V72L only) | 4.21 | 70.2% | 1,207 | Q-learning replaces rules |
 | v84 + v88 reverse-setup exit | (same entry, smarter exit) | 4.60 | 71.4% | 1,365 | Symmetric RL exit when opposite setup fires |
 | v89 + v88 | RL Q-functions (V72L + maturity) | 6.44 | 77.4% | 1,154 | 3 maturity features added; min_q 0.3→3.0 |
-| **v90 + v88** | **RL Q-functions (V72L + maturity + 24h-mom)** | **4.31** (+R) | **74.1%** | **2,452** | **2 direction-signed 24h-return features added; n_features 21→23** |
+| v90 + v88 | RL Q-functions (V72L + maturity + 24h-mom) | 4.31 (+R) | 74.1% | 2,452 | 2 direction-signed 24h-return features added; n_features 21→23 |
+| **v97 (v90 + v88, SL widened 4→6 ATR)** | (same model, looser stop) | **5.04** | **74.1%** | **2,452** | **+750R / +10% PF — 56% of 4-ATR stops were being hunted (recovered within 60 bars)** |
 
 ### v84 Holdout by Regime (2024-12-12 → 2026-05-01)
 

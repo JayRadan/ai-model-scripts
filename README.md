@@ -63,6 +63,20 @@ Cutoff = "2024-12-12"             # train/test holdout split
 | Server-side Dukascopy fetcher | `commercial/server/decision_engine/dukascopy_source.py` |
 | Step-by-step retrain commands | `RETRAIN.md` |
 
+### Live-ops tooling shipped 2026-05-17
+
+Beyond model retrains, three server-side hardening features run alongside
+every product. Shared infrastructure, no per-product training.
+
+| Feature | Commit | Where to use it |
+|---|---|---|
+| **Stack-gate** — blocks new same-direction slot while a prior slot is underwater. Caps regime-lag losses to 1 slot. | `1374daa` | Automatic, no UI. Filter funnel by `reason LIKE '%stack_gate%'`. |
+| **Admin regime override** — pin/clear live regime per product. Survives Render restarts via `regime_overrides.json`. | `f22903c` + fixes `730f112`, `fe27c3e` | `/admin/regime` panel. |
+| **Funnel model vs effective regime** — per-product card shows classifier verdict + active override. Amber border when pinned. | `d84b505` | `/admin` → Decision Funnel. |
+
+See product READMEs (`products/oracle_*/README.md` → "Live Operations
+Tooling" section) for per-product wiring details.
+
 ### Known caveats from May 2026 deploy events
 
 1. **The original v9.3 winner script was edited 4 minutes after winning and

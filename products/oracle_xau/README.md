@@ -1,12 +1,87 @@
 # Oracle XAU — Flagship RL-Enhanced XAUUSD Model
 
-> **Version:** v90 entry (maturity + 24h-momentum) + v88 reverse-setup exit + **v97 wider hard SL (6 ATR)**
-> **Holdout PF:** **5.04** at q>3 with v97 SL=6 ATR (was 4.31 at SL=4) | **WR:** **74.1%** | **+8,286R**
-> **Bundle:** `oracle_xau_validated.pkl` | **Deployed:** v84 2026-05-06 → v88 2026-05-08 → v89 2026-05-10 → v90 2026-05-12 → **v97 2026-05-13**
+> **Version:** **v99b q_entry** (dynamic-exit relabel) + v88 reverse-setup exit + v97 wider hard SL (6 ATR)
+> **Holdout PF:** **5.85** @ Q≥2.0 (backtest with v88+trail+6×ATR exits) | **WR:** **87.9%** | **+473R / N=174**
+> **Bundle:** `oracle_xau_validated.pkl` | **min_q:** 3.0 (raised from 0.3 — v99b Q-distribution runs higher)
+> **Deployed:** v84 2026-05-06 → v88 2026-05-08 → v89 2026-05-10 → v90 2026-05-12 → v97 2026-05-13 → **v99b 2026-05-17 (commit `e2e9681`)**
+
+## ⚠️ v99b live notes (deployed 2026-05-17)
+
+Only `q_entry` (5 XGBRegressors) was swapped. All other components retained from v97:
+confirm heads (`mdls`), `meta_mdl`, `exit_mdl`, `giveback_mdl`, exit_feats, meta_feats.
+
+**Why v99b:**
+v90 q_entry was trained on labels `TP=2R / SL=1R / 40-bar` — but production trades with
+6×ATR hard SL + v88 reverse + ML exit + no fixed TP. v99b labels match production reality:
+SL=2R, TP_min=4R required, then 2R trailing stop, max 200 bars.
+
+**Backups for rollback:** `oracle_xau_validated.pkl.bak_pre_v99b` (in vendored dir).
+Quick rollback: `git revert e2e9681 --no-edit && git push` (Render redeploys in ~90s).
 
 The premium-tier product. Uses 5 RL Q-functions (one per regime) to select
 entries, replacing the 28-rule hand-coded catalog. Two-stage confirmation:
 per-regime confirm head → meta-labeling gate.
+
+---
+
+## Live Operations Tooling (2026-05-17)
+
+Three production hardening features shipped same day as v99b. All operate
+server-side without retraining; both products share them.
+
+### 1. Stack-gate — prevents pyramiding into a losing position
+**Commit `1374daa`.** The multi-slot EA (Oracle XAU has 10 slots, BTC has 6)
+can fire slot s1..s5 in the same direction within minutes. If the regime
+classifier lags reality, every slot opens on the wrong side and they all hit
+SL together. Real example: 2026-05-14 BTC pyramid of 6 shorts from 79,900
+→ 83,320 = ~$1,400 loss across all slots.
+
+**The gate** ([api.py](../../../my-agents-and-website/commercial/server/decision_engine/api.py)):
+when `decide_entry` returns `action="open"`, the server scans the EA's
+`open_positions` list for any existing slot in the **same direction**. If
+any of them has floating R < 0 (= underwater), the new entry is replaced
+with `action="hold"` and `reason="stack_gate: prior slot dir=X floating=-NR"`.
+
+**Behavior:**
+- `s0` always fires (no prior slot to compare against)
+- `s1, s2, ...` only fire if all prior same-direction slots are currently in profit
+- Opposite-direction slots are ignored (you can still open a short while a long is losing)
+- Tracked in funnel log — filter by `reason LIKE '%stack_gate%'`
+
+**EA wiring** ([EdgePredictor_Connector_v2.mq5](../../../my-agents-and-website/commercial/server/MQL5_Experts/EdgePredictor_Connector_v2.mq5)):
+`BuildDecideBody` appends `open_positions: [...]` listing every occupied
+`g_slots[k]` on entry calls (exit calls unchanged). New compile shipped at
+`website/public/files/EdgePredictor_Connector.ex5`. Old EAs that don't send
+the field default to `[]` → gate stays inert → backward compatible.
+
+### 2. Admin regime override — pin/clear live regime from `/admin/regime`
+**Commit `f22903c` (+ fixes `730f112`, `fe27c3e`).** When the analyst sees
+the classifier lagging real conditions (24h chart shows uptrend but
+classifier still says Downtrend due to 4h windowing lag), they can force
+the correct regime manually instead of waiting for the lag to clear.
+
+**Three server endpoints** (ADMIN_SECRET-gated, `/decide/` prefix):
+- `GET  _regime-overrides` — list active overrides
+- `POST _regime-override?product=oracle_xau&cid=N&note=...` — pin
+- `DELETE _regime-override?product=oracle_xau` — clear (back to auto)
+
+**Persistence:** `regime_overrides.json` in `decision_engine/` survives
+Render restarts. `decide_entry` reads it on every entry call via
+`_state.regime_override.get(product)` and passes as `cluster_override`.
+
+**Admin UI** (`/admin/regime`): panel above the chart shows:
+- **Model says: C{N} {Name}** — classifier verdict (green / amber if marginal)
+- **Engine acts as: C{N} {Name} (pinned|auto)** — what `decide_entry` uses
+- Dropdown of all 5 clusters, optional note, **Pin** / **Clear** buttons
+
+Same info also surfaces in `/admin` → Decision Funnel tab per product card.
+
+### 3. Funnel: model verdict vs effective regime
+**Commit `d84b505`.** Per-product regime card in the funnel panel now shows
+classifier verdict and effective (post-override) regime side-by-side. Card
+border turns amber when an override is active so the analyst can spot it
+across the product grid at a glance. Auto-refreshes on the existing 30s
+funnel timer.
 
 ---
 
@@ -21,6 +96,7 @@ per-regime confirm head → meta-labeling gate.
 | v89 + v88 | RL Q-functions (V72L + maturity) | 6.44 | 77.4% | 1,154 | 3 maturity features added; min_q 0.3→3.0 |
 | v90 + v88 | RL Q-functions (V72L + maturity + 24h-mom) | 4.31 (+R) | 74.1% | 2,452 | 2 direction-signed 24h-return features added; n_features 21→23 |
 | **v97 (v90 + v88, SL widened 4→6 ATR)** | (same model, looser stop) | **5.04** | **74.1%** | **2,452** | **+750R / +10% PF — 56% of 4-ATR stops were being hunted (recovered within 60 bars)** |
+| **v99b (dynamic-exit relabel + v88 + 6×ATR)** ★ | Q regressors retrained on dynamic-exit labels (SL=2R, TP_min=4R, 2R trail, 200-bar max) | **5.85** @ Q≥2.0 | **87.9%** | 174 | **min_q raised 0.3→3.0; labels now match prod exit reality (was 2R/-1R/40bar)** |
 
 ### v84 Holdout by Regime (2024-12-12 → 2026-05-01)
 
@@ -33,6 +109,43 @@ per-regime confirm head → meta-labeling gate.
 | C4 HighVol | 103 | 63.1% | 3.55 | +321 |
 
 C0 + C3 carry 64% of trades and ~85% of total profit.
+
+---
+
+## v99b — dynamic-exit q_entry retrain (2026-05-17)
+
+### Threshold sweep on holdout (2024-12-12 → 2026-05-01)
+
+Backtest uses production-matching exit stack: v88 reverse-setup + trail (after +4R, 2R behind peak) + 6×ATR hard SL + 200-bar max.
+
+| Q ≥ | Trades | WR | PF | sumR | avgR | maxDD |
+|---|---|---|---|---|---|---|
+| 0.5 | 593 | 80.9% | 3.11 | +1193 | +2.01 | −18R |
+| 1.0 | 466 | 85.2% | 4.12 | +1116 | +2.40 | −12R |
+| 1.5 | 294 | 85.7% | 4.50 | +757 | +2.58 | −14R |
+| **2.0** | **174** | **87.9%** | **5.85** | **+473** | **+2.72** | **−12R** ← deployed min_q |
+| 2.5 | 95 | 90.5% | 6.68 | +249 | +2.62 | −17R |
+| 3.0 | 46 | 95.7% | 12.62 | +139 | +3.03 | −6R |
+
+### What changed
+- **Label simulator**: v90 used `TP=2R / SL=1R / 40-bar` fixed exits. v99b uses **dynamic exit**:
+  - SL = 2 ATR (fixed)
+  - TP_min = 4 ATR (required to qualify as winner)
+  - After TP_min hit: trail 2R behind peak
+  - Max hold: 200 bars
+- **Features**: identical 23 features (V72L + v89 maturity + v90 momentum)
+- **Architecture**: identical (per-cluster XGBRegressor)
+- **min_q**: bumped 0.3 → 3.0 because v99b Q-values run higher than v97 (e.g. C0 zeros Q≈3.0 vs v97 Q≈2.0). With min_q=3.0 v99b is slightly more conservative than v90 with min_q=0.3 was.
+
+### Files
+- `experiments/v99_rl_relabel/01_label.py` — labeler (smoke test on 30 days)
+- `experiments/v99_rl_relabel/03_label_full.py` — full XAU + BTC labeling
+- `experiments/v99_rl_relabel/06_add_features_retrain.py` — final 23-feat retrain
+- `experiments/v99_rl_relabel/08_backtest_with_v88_exit.py` — backtest with prod-matching exits
+- `experiments/v99_rl_relabel/09_build_deploy_bundle.py` — packages v99b q_entry into prod-pkl format
+- `experiments/v99_rl_relabel/q_models_xau_v99b_23feat.pkl` — source (q_entry only)
+- `commercial/server/decision_engine/models/oracle_xau_validated.pkl` — deployed full bundle
+- `commercial/server/decision_engine/models/oracle_xau_validated.pkl.bak_pre_v99b` — rollback backup
 
 ---
 

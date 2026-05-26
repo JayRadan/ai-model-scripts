@@ -1,0 +1,24 @@
+========================================================================
+  Hermes BTC — bundle training pipeline (M1 + order-flow)
+========================================================================
+
+[1/5] loading M1 + orderflow ...
+  bars: 741,465  range: 2024-11-30 23:00:00 → 2026-05-02 21:59:00
+
+[2/5] TFK + standard features ...
+  bars=741,465  median_atr=56.314  spread=0.089R
+
+[3/5] building candidates + labels ...
+  candidates: 87,338
+    50,000/87,338
+  features: 43
+  feat_cols: ['dist_at_signal', 'dist_abs', 'regime_age', 'bar_range_atr', 'force', 'velocity', 'x_est', 'regime_w', 'trend_raw', 'trend', 'rsi14', 'dist_ema20', 'dist_ema50', 'dist_ema100', 'dist_ema200', 'slope5', 'slope10', 'slope20', 'atr_ratio', 'm5_rsi14', 'm5_slope5', 'm5_ema50_dist', 'm15_rsi14', 'm15_slope5', 'm15_ema50_dist', 'h1_rsi14', 'h1_slope5', 'h1_ema50_dist', 'committed_dir', 'imbalance_ratio', 'bid_ask_vol_ratio', 'vpin_proxy', 'median_spread', 'cum_signed_5', 'flow_persistence_5', 'cum_signed_15', 'flow_persistence_15', 'cum_signed_60', 'flow_persistence_60', 'spread_vol_50', 'tick_intensity_50', 'signed_flow', 'n_ticks']
+  train=66,962  test=20,376  cutoff=2026-01-15 00:00:00
+
+[4/5] fitting XGBRegressor ...
+  holdout @ Q>=1.0: {'n': 6797, 'wr': 0.6878034426953068, 'pf': 2.4587435722351074, 'sum_r': 12096.021484375, 'max_dd_r': 487.03472900390625, 'avg_r': 1.7796118259429932}
+
+[5/5] freezing bundle ...
+  wrote /home/jay/Desktop/my-agents-and-website/commercial/server/decision_engine/models/hermes_btc_validated.pkl  (19s)
+
+  done.

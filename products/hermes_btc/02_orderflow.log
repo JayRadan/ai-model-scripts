@@ -1,0 +1,13 @@
+  aggregating 518 tick parquets → M1 with orderflow ...
+    50/518  (2s)
+    100/518  (6s)
+    150/518  (7s)
+    200/518  (9s)
+    250/518  (12s)
+    300/518  (13s)
+    350/518  (16s)
+    400/518  (19s)
+    450/518  (21s)
+    500/518  (23s)
+  saved m1_btc_orderflow.parquet → 741,465 bars  (25s)
+  cols: ['time', 'open', 'high', 'low', 'close', 'tick_volume', 'n_ticks', 'signed_flow', 'abs_volume', 'bid_v_sum', 'ask_v_sum', 'median_spread', 'imbalance_ratio', 'bid_ask_vol_ratio', 'vpin_proxy', 'cum_signed_5', 'cum_signed_abs_5', 'flow_persistence_5', 'cum_signed_15', 'cum_signed_abs_15', 'flow_persistence_15', 'cum_signed_60', 'cum_signed_abs_60', 'flow_persistence_60', 'spread_vol_50', 'tick_intensity_50']

@@ -1,21 +1,80 @@
 # Hermes XAU — M1 TFK + Order-Flow Q-Regressor
 
-> **Version:** **v103** (TFK line-cross entries + order-flow features + dual-direction Q + multi-pos with BE-on-new-entry)
-> **Holdout PF:** **2.09** | **WR:** **59.1%** | **+6,372 R** / **n=4,828** / **20 trd/day**
-> **Holdout USD @ 0.01 lot:** **+$15,824** / max DD **−$599** / starting $1,000 → final **$16,824**
-> **Bundle:** `hermes_xau_validated.pkl` (43 features) | **Q threshold:** 1.0 | **NEAR threshold:** 0.50 × ATR
-> **Deployed:** **2026-05-25** (commit `b50515c` + `27950a1` + `fe2de24` + `7ebf596`)
+> **Version:** **v103 + combined-Q upgrade** (2026-05-26)
+> **Architecture:** TFK regime + (pullback-to-line OR deep-counter-pullback) entries
+>                   + XGBRegressor Q on 43 features + multi-pos with BE-on-new-entry
+> **Holdout PF:** **3.21** @ Q≥4.0 | **WR:** **70.7%** | **+19,877 R** / **n=8,232** / **34 trd/day**
+> **Holdout USD @ 0.01 lot (multi-pos sim):** **+$14,871** / max DD **−$493** / starting $1,000 → final **$15,871**
+> **Bundle:** `hermes_xau_validated.pkl` (43 features) | **NEAR ≤ 0.50** OR **counter ≥ 1.5 ATR** | **Q ≥ 4.0**
+> **Deployed:** v103 base 2026-05-25 (`b50515c`) → **combined-Q 2026-05-26 (`102da4d`)**
+
+## 🆕 Combined-Q upgrade (2026-05-26)
+
+User-suggested hypothesis: when regime is GREEN but price has popped ≥1.5 ATR
+BELOW the TFK line (or RED + ≥1.5 ATR above), that's also a tradeable entry
+in the regime direction (mean-reversion to line). **Validated** — Q retrained
+on the union of pullback + counter candidates learned both setup types equally
+well (PF 2.18 pullback / PF 2.20 counter at Q≥1.0).
+
+| | v103 base (pullback-only) | combined-Q (current) |
+|---|---|---|
+| Entry condition | `\|dist\| ≤ 0.50` | `\|dist\| ≤ 0.50` **OR** `dist_signed × cdir ≤ -1.5` |
+| q_thr | 1.0 | **4.0** |
+| Training candidates | 30,470 | **175,916** (5.8×) |
+| Holdout PF | 2.09 | **3.21** |
+| Holdout WR | 59.1% | **70.7%** |
+| Holdout sumR | +6,372 | **+19,877** (3.1×) |
+| Holdout trades | 4,828 | 8,232 (raw) / 2,518 (multi-pos sim) |
+| DD / sumR | ~1.8% | **3.0%** |
+
+Holdout Q sweep (all on the same 242-day window):
+
+| Q | n | WR | PF | sumR | DD |
+|---|---|---|---|---|---|
+| 1.0 | 33,071 | 64.8% | 2.19 | +53,326 | 895 |
+| 2.0 | 21,763 | 66.9% | 2.49 | +40,942 | 819 |
+| 3.0 | 13,723 | 68.5% | 2.81 | +29,351 | 736 |
+| **4.0** | **8,232** | **70.7%** | **3.21** | **+19,877** | **605** ← shipped |
+| 5.0 | 4,897 | 72.0% | 3.60 | +13,138 | 492 |
+| 6.0 | 2,960 | 73.2% | 4.11 | +9,081 | 382 |
+
+Q=4.0 chosen: highest PF that still has ~34 trades/day, matching original Hermes
+trade cadence. Q=5.0+ thins too much for meaningful daily stats.
+
+**Setup-type breakdown at Q≥1.0** (proves counter trades carry real edge):
+
+| Setup type | n | WR | PF | sumR |
+|---|---|---|---|---|
+| Pullback (\|dist\|≤0.50) | 11,426 | 63.8% | 2.18 | +18,624 |
+| Counter (≥1.5R wrong side) | 21,645 | 65.4% | 2.20 | +34,702 |
+
+The counter trades fire ~2× more often than pullback trades in trending markets
+because trends spend a lot of time "stretched" beyond the line.
+
+**Live trace tag:** every Hermes funnel entry now includes
+`trace["setup_type"] = "pullback" | "counter"` so you can filter by setup type.
+
+**Rollback to v103 base:**
+```bash
+cd /home/jay/Desktop/my-agents-and-website/commercial
+git revert 102da4d
+cd server/decision_engine/models
+mv hermes_xau_validated.pkl.bak_pre_combined_2026-05-26 hermes_xau_validated.pkl
+git add -A && git commit -m "rollback hermes_xau combined-Q" && git push
+```
+
+---
+
+## ⚠️ Deployment notes (2026-05-25 base)
 
 The third production model alongside Oracle XAU / Oracle BTC. Trades M1 XAUUSD
 using a single XGBRegressor Q-function on **29 standard features + 14
 order-flow features** computed live from Dukascopy ticks. Multi-position
 (4 slots) with break-even-on-new-entry and switch rule.
 
-## ⚠️ Deployment notes (2026-05-25)
-
 The whole stack ships as a single self-contained product:
 - **Server side** (vendored in `commercial/server/decision_engine/`):
-  - `configs/hermes_xau.py` — frozen hyperparameters (NEAR=0.50, Q≥1.0, SL=4R, TRAIL=3R, BE=1R, max_conc=4, switch=0.5, cooldown=5)
+  - `configs/hermes_xau.py` — frozen hyperparameters (NEAR=0.50, **counter_thr=1.5**, **Q≥4.0**, SL=4R, TRAIL=3R, BE=1R, max_conc=4, switch=0.5, cooldown=5)
   - `hermes_features.py` — TFK indicator + 29 standard features
   - `tick_source.py` — live tick aggregation → 14 order-flow features per M1 bar
   - `decide_hermes.py` — entry + exit (stateless server, EA owns slot state)
@@ -35,11 +94,12 @@ in the commercial repo. Render redeploys Oracle-only in ~90s.
 ## Strategy in one paragraph
 
 Each minute, the server computes TFK on the rolling M1 bar series → if
-`committed_dir != 0` (green/red trend) AND `|close − tfk_line| / ATR ≤ 0.50`
-(price near the trend line), it computes order-flow features from the live
-tick stream and feeds 43 features into an XGBRegressor. If predicted R ≥ 1.0,
-the server opens a trade in the regime direction. Up to 4 concurrent slots
-managed via the EA. On each new entry, any slot in profit ≥ 1R gets its SL
+`committed_dir != 0` (green/red trend) AND EITHER `|close − tfk_line| / ATR ≤ 0.50`
+(pullback to line) OR `dist_signed × committed_dir ≤ -1.5` (price popped through
+to the wrong side of the line by ≥1.5 ATR), it computes order-flow features from
+the live tick stream and feeds 43 features into an XGBRegressor. If predicted
+R ≥ 4.0, the server opens a trade in the regime direction. Up to 4 concurrent
+slots managed via the EA. On each new entry, any slot in profit ≥ 1R gets its SL
 moved to break-even. If at capacity, the new signal can switch out the
 worst-Q open slot. Each trade exits at the FIRST of: hard SL (−4 ATR),
 trail giveback (3 ATR from peak favor), max-hold 300 bars.

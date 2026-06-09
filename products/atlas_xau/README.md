@@ -6,6 +6,27 @@
 > **Entry gate:** STRICT pattern + Q ≥ **2.0** (raised from 1.0 on 2026-06-04)
 > **Exit:** SL 6×ATR · TRAIL 2×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
 
+
+## 🧠 2026-06-09 — Time-of-day filter (deployed)
+
+After a 30-day post-deploy backtest sweep, added `time_block_utc=(18, 2)` to
+block entries between **18:00 and 02:00 UTC** (NY-pm + Asia overnight).
+
+| | Baseline | + time-block 18-02 |
+|---|---|---|
+| Trades | 439 | 310 (-29%) |
+| WR | 70.2% | **74.8%** |
+| PF | 1.14 | **1.45** |
+| sumR | +93 | **+185** |
+| DD | 86.31 | **36.14** (-58%) |
+| $@0.10 | $1,399 | **$2,776** (+98%) |
+
+**Biggest single-product win of the deployment.** Nearly doubles $ AND cuts
+DD by more than half. Atlas's strict reversal pattern bleeds most during
+overnight gold drift; blocking those hours saves the day. Disabled with
+`time_block_utc = (0, 0)`.
+
+
 ## Entry rule (STRICT)
 
 **BUY** when ALL of:

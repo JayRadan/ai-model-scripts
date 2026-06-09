@@ -86,6 +86,9 @@ STRONG_ATR   = 0.8       # strong-body threshold for the prior bar
 RMULT        = 1.0       # Kalman R multiplier
 KF_AGE_MIN   = 3
 Q_THR        = 2.0       # raised 1.0 → 2.0 on 2026-06-04
+TIME_BLOCK   = (18, 2)   # 2026-06-09 — block entries at UTC hours [18, 2)
+                         # +98% $ vs no filter; DD -58%. (0, 0) = disabled
+TREND_SLOPE_BLOCK = 0.0  # disabled on Atlas XAU
 R_to_USD     = 1.50      # 0.01 lot XAUUSD
 
 BUNDLE_PATH = SERVER / "decision_engine/models/atlas_xau_validated.pkl"
@@ -176,8 +179,18 @@ times = df["time"].to_numpy()
 # ── 5. Multi-pos sim with BE, switch, cooldown ─────────────────────────
 active = []; executed = []
 last_open = {-1: -10**9, 1: -10**9}
+# Apply Q threshold + time filter (matches deployed config)
+def passes_filters(k):
+    if q_live[k] < Q_THR: return False
+    if TIME_BLOCK != (0, 0):
+        h = pd.Timestamp(df["time"].iloc[idxs[k]]).hour
+        s, e = TIME_BLOCK
+        blocked = (s <= h < e) if s < e else (h >= s or h < e)
+        if blocked: return False
+    return True
+
 info = {int(idxs[k]): (int(dirs[k]), float(q_live[k]))
-        for k in range(len(idxs)) if q_live[k] >= Q_THR}
+        for k in range(len(idxs)) if passes_filters(k)}
 if not info:
     print("  no Atlas candidates passed q_thr filter")
     sys.exit(0)

@@ -81,6 +81,9 @@ NEAR_THR     = 0.50
 COUNTER_THR  = 1.5
 Q_THR        = 4.0
 DIST_CAP     = 3.0       # 2026-06-04 stretched-counter veto
+TIME_BLOCK   = (20, 1)   # 2026-06-09 — block entries at UTC hours [20, 1)
+                         # +3.5% $ vs no time-block; (0, 0) = disabled
+TREND_SLOPE_BLOCK = 0.0  # disabled on Hermes XAU (HURT in backtest)
 R_to_USD     = 1.50      # 0.01 lot XAUUSD ≈ $1.50 / R
 
 BUNDLE_PATH = SERVER / "decision_engine/models/hermes_xau_validated.pkl"
@@ -212,9 +215,22 @@ is_counter_at_cand = is_counter[idxs]
 is_pullback_at_cand = is_pullback[idxs]
 stretched_block = is_counter_at_cand & ~is_pullback_at_cand & (dist_abs_at_cand > DIST_CAP)
 keep = ~stretched_block
-n_blocked = int(stretched_block.sum())
 idxs = idxs[keep]; dirs = dirs[keep]
-print(f"  candidates after dist_cap={DIST_CAP} veto: {len(idxs)} (blocked {n_blocked} stretched-counter)")
+
+# 2026-06-09 — per-product time-of-day filter mirrors deployed config
+if TIME_BLOCK != (0, 0):
+    hours = pd.to_datetime(df["time"].iloc[idxs].values).hour
+    s, e = TIME_BLOCK
+    bad = (hours >= s) & (hours < e) if s < e else (hours >= s) | (hours < e)
+    keep_time = ~bad
+    n_time_blocked = int(bad.sum())
+    idxs = idxs[keep_time]; dirs = dirs[keep_time]
+    print(f"  candidates after dist_cap={DIST_CAP} + time_block={TIME_BLOCK} UTC: "
+          f"{len(idxs)} (blocked {int(stretched_block.sum())} stretched-counter, "
+          f"{n_time_blocked} time-windowed)")
+else:
+    print(f"  candidates after dist_cap={DIST_CAP} veto: {len(idxs)} "
+          f"(blocked {int(stretched_block.sum())} stretched-counter)")
 
 # ── 4. Q score, gate ────────────────────────────────────────────────────
 bundle = pickle.load(open(BUNDLE_PATH, "rb"))

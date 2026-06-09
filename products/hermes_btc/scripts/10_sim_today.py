@@ -81,6 +81,9 @@ NEAR_THR     = 0.50
 COUNTER_THR  = 1.5
 Q_THR        = 4.0
 DIST_CAP     = 0.0       # disabled on BTC
+TIME_BLOCK   = (0, 0)    # disabled — time filters HURT BTC (24/7 market)
+TREND_SLOPE_BLOCK = 1.5  # 2026-06-09 — block counter when |slope20|>1.5 and dir opposite
+                         # +10% $ vs no gate; DD -22%
 R_to_USD     = 2.30      # 0.01 lot BTCUSD ≈ $2.30 / R (depends on broker)
 
 BUNDLE_PATH = SERVER / "decision_engine/models/hermes_btc_validated.pkl"
@@ -210,11 +213,25 @@ dirs = cdir[idxs].copy()
 dist_abs_at_cand = np.abs(dist_signed[idxs])
 is_counter_at_cand = is_counter[idxs]
 is_pullback_at_cand = is_pullback[idxs]
-stretched_block = is_counter_at_cand & ~is_pullback_at_cand & (dist_abs_at_cand > DIST_CAP)
+stretched_block = is_counter_at_cand & ~is_pullback_at_cand & (dist_abs_at_cand > DIST_CAP) if DIST_CAP > 0 else np.zeros(len(idxs), bool)
 keep = ~stretched_block
 n_blocked = int(stretched_block.sum())
 idxs = idxs[keep]; dirs = dirs[keep]
-print(f"  candidates after dist_cap={DIST_CAP} veto: {len(idxs)} (blocked {n_blocked} stretched-counter)")
+is_counter_at_cand = is_counter_at_cand[keep]
+
+# 2026-06-09 — Trend-gate (deployed on Hermes BTC). Block counter trades that
+# fight a strong 20-bar slope. +10% $ over 30 days; DD -22%.
+if TREND_SLOPE_BLOCK > 0:
+    slope20_arr = fdf["slope20"].to_numpy(float)[idxs]
+    counter_trend = (dirs.astype(float) * np.sign(slope20_arr)) < 0
+    trend_block = is_counter_at_cand & counter_trend & (np.abs(slope20_arr) > TREND_SLOPE_BLOCK)
+    n_trend_blocked = int(trend_block.sum())
+    keep_trend = ~trend_block
+    idxs = idxs[keep_trend]; dirs = dirs[keep_trend]
+    print(f"  candidates after dist_cap={DIST_CAP} + trend_gate>{TREND_SLOPE_BLOCK}: "
+          f"{len(idxs)} ({n_blocked} stretched-counter, {n_trend_blocked} trend-blocked)")
+else:
+    print(f"  candidates after dist_cap={DIST_CAP} veto: {len(idxs)} (blocked {n_blocked} stretched-counter)")
 
 # ── 4. Q score, gate ────────────────────────────────────────────────────
 bundle = pickle.load(open(BUNDLE_PATH, "rb"))

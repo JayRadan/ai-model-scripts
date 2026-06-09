@@ -8,6 +8,27 @@
 > **Bundle:** `hermes_xau_validated.pkl` (43 features) | **NEAR ≤ 0.50** OR **counter ≥ 1.5 ATR** | **Q ≥ 4.0**
 > **Deployed:** v103 base 2026-05-25 (`b50515c`) → **combined-Q 2026-05-26 (`102da4d`)**
 
+
+## 🧠 2026-06-09 — Time-of-day filter (deployed)
+
+After a 30-day post-deploy backtest sweep across UTC blocking windows,
+added `time_block_utc=(20, 1)` to block entries between **20:00 and 01:00 UTC**
+(NY-close + Asia-open transition).
+
+| | Baseline | + time-block 20-01 |
+|---|---|---|
+| Trades | 579 | 537 (-7%) |
+| WR | 69.1% | **71.1%** |
+| PF | 3.33 | **3.93** |
+| sumR | +891 | +922 |
+| DD | 61.36 | 61.36 |
+| $@0.10 | $13,367 | **$13,834** |
+
+Server-side config only — no model retrain, no EA recompile. Disabled with
+`time_block_utc = (0, 0)`. Trend-gate also wired but disabled here (sweep
+showed it HURT Hermes XAU; `trend_slope_block = 0.0`).
+
+
 ## 🆕 Combined-Q upgrade (2026-05-26)
 
 User-suggested hypothesis: when regime is GREEN but price has popped ≥1.5 ATR
@@ -74,7 +95,7 @@ order-flow features** computed live from Dukascopy ticks. Multi-position
 
 The whole stack ships as a single self-contained product:
 - **Server side** (vendored in `commercial/server/decision_engine/`):
-  - `configs/hermes_xau.py` — frozen hyperparameters (NEAR=0.50, **counter_thr=1.5**, **Q≥4.0**, SL=4R, TRAIL=3R, BE=1R, max_conc=4, switch=0.5, cooldown=5)
+  - `configs/hermes_xau.py` — frozen hyperparameters (NEAR=0.50, **counter_thr=1.5**, **Q≥3.0** (loosened from 4.0 on 2026-05-27 per live funnel), **SL=6R**, **TRAIL=2R**, **BE=+0.5R conditional on new entry signal**, max_conc=4, switch=0.5, cooldown=5) — **verified against deployed `commercial/server/decision_engine/configs/hermes_xau.py` on 2026-05-29.** Earlier doc string "SL=4R/TRAIL=3R/BE=1R" was stale.
   - `hermes_features.py` — TFK indicator + 29 standard features
   - `tick_source.py` — live tick aggregation → 14 order-flow features per M1 bar
   - `decide_hermes.py` — entry + exit (stateless server, EA owns slot state)
@@ -135,7 +156,7 @@ Exit-reason mix (approximate):
 Reproducing the holdout — run the same script the bundle was trained from:
 ```bash
 cd ~/Desktop/new-model-zigzag
-python3 experiments/v103_tfk_regime/45_near_sweep_m1.py
+python3 (removed — research lineage; productized in scripts/)/45_near_sweep_m1.py
 # Look at the NEAR=0.50 row → PF 2.09, sumR +6,372, n=4,828
 ```
 
@@ -253,7 +274,7 @@ git push   # Render + Vercel auto-deploy in ~90 s
 
 ## Improvement journey (what works and what didn't)
 
-The v103 research lineage in `experiments/v103_tfk_regime/`:
+The v103 research lineage in `(removed — research lineage; productized in scripts/)/`:
 
 | Iteration | Change | PF | sumR | DD | Notes |
 |---|---|---|---|---|---|

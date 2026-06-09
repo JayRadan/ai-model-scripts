@@ -6,6 +6,27 @@
 > **Entry gate:** STRICT pattern + Q ≥ **3.0**
 > **Exit:** SL 6×ATR · TRAIL 2×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
 
+
+## 🧠 2026-06-09 — Time-of-day filter (deployed)
+
+After a 30-day post-deploy backtest sweep, added `time_block_utc=(19, 2)` to
+block entries between **19:00 and 02:00 UTC** (late US session + Asia overnight).
+
+DJI cash close is around 21:00 UTC, so this blocks the thin pre-close session
+plus all overnight where Atlas's reversal pattern stops out frequently.
+
+| | Baseline | + time-block 19-02 |
+|---|---|---|
+| Trades | 335 | 257 (-23%) |
+| WR | 68.7% | **74.7%** |
+| PF | 1.36 | **1.83** |
+| sumR | +207 | **+296** |
+| DD | 92.30 | **51.67** (-44%) |
+| $@0.10 | $1,549 | **$2,224** (+44%) |
+
+Disabled with `time_block_utc = (0, 0)`.
+
+
 ## Holdout (post-Sep 2025, 8 months unseen)
 
 | Q | trades | WR | PF | sumR |

@@ -5,6 +5,29 @@
 
 ---
 
+
+## 🧠 2026-06-09 — Trend-gate filter (deployed)
+
+After 30-day post-deploy backtest, **time filters HURT BTC** (24/7 market with
+no quiet hours). The **trend-gate** was the winner: block counter-trend
+entries when the 20-bar slope opposes direction and `|slope20| > 1.5`.
+
+Config: `trend_slope_block=1.5`.
+
+| | Baseline | + trend-gate >1.5 |
+|---|---|---|
+| Trades | 1071 | 823 (-23%) |
+| WR | 59.1% | **62.7%** |
+| PF | 1.79 | **2.37** |
+| sumR | +816 | +899 |
+| DD | 91.90 | **71.45** (-22%) |
+| $@0.10 | $18,775 | **$20,685** |
+
+Biggest single-filter $ uplift across the product line. DD reduction is the
+real story — fewer "I lost 6R in 10 minutes" tickets. Disabled with
+`trend_slope_block = 0.0`.
+
+
 ## TL;DR
 
 Bitcoin counterpart to Hermes XAU. Same architecture, BTC-specific bundle, slightly tighter Q gate.
@@ -91,7 +114,7 @@ products/hermes_btc/
     └── 09_build_website_backtest_json.py     writes backtest_data.json hermes_btc entry
 ```
 
-Note: scripts/ here was copied & adapted from `products/hermes_xau/scripts/`. The TFK indicator code (`tfk.py`) and training feature engineering (`add_standard_features` from `experiments/v103_tfk_regime/43_m1_with_orderflow.py`) are shared with Hermes XAU — no need to duplicate.
+Note: scripts/ here was copied & adapted from `products/hermes_xau/scripts/`. The TFK indicator code (`tfk.py`) and training feature engineering (`add_standard_features` from `products/_shared/m1_with_orderflow.py`) are shared with Hermes XAU — no need to duplicate.
 
 ---
 

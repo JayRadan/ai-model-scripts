@@ -6,6 +6,17 @@
 > **Entry gate:** STRICT pattern + Q ≥ **3.0**
 > **Exit:** SL 6×ATR · TRAIL 2×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
 
+
+## 🧠 2026-06-09 — No filter applied
+
+Backtest sweep tested time-filter and trend-gate variants — **none beat
+baseline**. Atlas BTC's STRICT 2-bar reversal pattern already filters trend
+context internally; additional filters cut volume without removing losers.
+
+Both config fields exist (`time_block_utc = (0, 0)`, `trend_slope_block = 0.0`)
+but are disabled. Baseline ($1,506 @0.10 on 30d unseen) is the current best.
+
+
 ## Holdout (post-Sep 2025, 8 months unseen)
 
 | Q | trades | WR | PF | sumR |

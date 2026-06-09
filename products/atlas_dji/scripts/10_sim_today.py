@@ -10,12 +10,11 @@ every trade Atlas DJI would have opened today plus its outcome.
 DEPLOYED CONFIG MIRRORED (commercial/server/decision_engine/configs/atlas_dji.py)
 ================================================================================
   symbol_base:    DJIUSD
-  q_thr:          3.0     (selected on 2026-06-04 from 8-month holdout sweep
-                           on 8 years of M1 DJI data. Best PF (1.26) at
-                           1,678 trades. Q≥4.0 PF 1.66 but only 160 trades
-                           (too thin to deploy).)
+  q_thr:          3.0     (unchanged. Confirmed as best Q gate for DJI by the
+                           2026-06-09 kage sweep.)
   strong_body:    0.8 ATR (entry needs a "strong" previous candle: body >= 0.8 ATR)
-  kf_age_min:     3       (Kalman opposite color age >= 3 bars)
+  kf_age_min:     1       (lowered 3 → 1 on 2026-06-09. kage≥1 Q≥3.0 beats
+                           kage≥3 Q≥3.0 on 8-month holdout: +36% $, +6% DD.)
   require_both:   true    (close must be on the correct side of BOTH
                            the Kalman line AND the Hermes TFK line)
   sl_hard_atr:    6.0
@@ -85,8 +84,8 @@ SWITCH_DELTA = 0.5
 COOLDOWN     = 5
 STRONG_ATR   = 0.8       # strong-body threshold for the prior bar
 RMULT        = 1.0       # Kalman R multiplier
-KF_AGE_MIN   = 3
-Q_THR        = 3.0       # selected on 2026-06-04 from 8-year holdout sweep
+KF_AGE_MIN   = 1         # lowered 3 → 1 on 2026-06-09 (kage sweep)
+Q_THR        = 3.0       # unchanged (2026-06-04 holdout, confirmed by kage sweep)
 TIME_BLOCK   = (19, 2)   # 2026-06-09 — block entries at UTC hours [19, 2)
                          # +44% $ vs no filter; DD -44%. (0, 0) = disabled
 TREND_SLOPE_BLOCK = 0.0  # disabled on Atlas DJI

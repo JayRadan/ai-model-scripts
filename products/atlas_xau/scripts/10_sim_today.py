@@ -10,12 +10,12 @@ every trade Atlas would have opened today plus its outcome.
 DEPLOYED CONFIG MIRRORED (commercial/server/decision_engine/configs/atlas_xau.py)
 ================================================================================
   symbol_base:    XAUUSD
-  q_thr:          2.0     (raised 1.0 → 2.0 on 2026-06-04 after 30-day
-                           backtest. Small 30d cost (-5.5%) but halved DD
-                           on post-deploy days and trims the weakest
-                           stretched entries.)
+  q_thr:          1.5     (lowered 2.0 → 1.5 on 2026-06-09 after kage sweep.
+                           kage≥3 + Q≥1.5 beats Q≥2.0: +42% $, −8% DD on
+                           8-month holdout. Q model discriminates well enough
+                           that lowering the gate lets valid entries through.)
   strong_body:    0.8 ATR (entry needs a "strong" previous candle: body >= 0.8 ATR)
-  kf_age_min:     3       (Kalman opposite color age >= 3 bars)
+  kf_age_min:     3       (Kalman opposite color age >= 3 bars — unchanged)
   require_both:   true    (close must be on the correct side of BOTH
                            the Kalman line AND the Hermes TFK line)
   sl_hard_atr:    6.0
@@ -85,7 +85,7 @@ COOLDOWN     = 5
 STRONG_ATR   = 0.8       # strong-body threshold for the prior bar
 RMULT        = 1.0       # Kalman R multiplier
 KF_AGE_MIN   = 3
-Q_THR        = 2.0       # raised 1.0 → 2.0 on 2026-06-04
+Q_THR        = 1.5       # lowered 2.0 → 1.5 on 2026-06-09 (kage sweep)
 TIME_BLOCK   = (18, 2)   # 2026-06-09 — block entries at UTC hours [18, 2)
                          # +98% $ vs no filter; DD -58%. (0, 0) = disabled
 TREND_SLOPE_BLOCK = 0.0  # disabled on Atlas XAU

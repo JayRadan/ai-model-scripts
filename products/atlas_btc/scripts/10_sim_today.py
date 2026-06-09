@@ -10,12 +10,13 @@ every trade Atlas BTC would have opened today plus its outcome.
 DEPLOYED CONFIG MIRRORED (commercial/server/decision_engine/configs/atlas_btc.py)
 ================================================================================
   symbol_base:    BTCUSD
-  q_thr:          3.0     (selected on 2026-06-04 from 8-month holdout sweep —
-                           best PF (1.37) at 2,779 trades. Q≥4.0 has higher
-                           PF 1.43 but only 960 trades; Q≥2.5 has comparable
-                           upside with 30% more noise.)
+  q_thr:          2.0     (lowered 3.0 → 2.0 on 2026-06-09, paired with kage≥1.
+                           kage≥1 + Q≥2.0 beats kage≥3 + Q≥3.0 on 8-month
+                           holdout: +31% $, +11% DD. BTC 24/7 market sees the
+                           most short-lived Kalman flips during sharp moves.)
   strong_body:    0.8 ATR (entry needs a "strong" previous candle: body >= 0.8 ATR)
-  kf_age_min:     3       (Kalman opposite color age >= 3 bars)
+  kf_age_min:     1       (lowered 3 → 1 on 2026-06-09. Short Kalman flips during
+                           impulse moves now qualify as valid pullback entries.)
   require_both:   true    (close must be on the correct side of BOTH
                            the Kalman line AND the Hermes TFK line)
   sl_hard_atr:    6.0
@@ -84,8 +85,8 @@ SWITCH_DELTA = 0.5
 COOLDOWN     = 5
 STRONG_ATR   = 0.8       # strong-body threshold for the prior bar
 RMULT        = 1.0       # Kalman R multiplier
-KF_AGE_MIN   = 3
-Q_THR        = 3.0       # selected on 2026-06-04 from 8-month holdout sweep
+KF_AGE_MIN   = 1         # lowered 3 → 1 on 2026-06-09 (kage sweep)
+Q_THR        = 2.0       # lowered 3.0 → 2.0 on 2026-06-09 (kage sweep)
 R_to_USD     = 2.30      # 0.01 lot BTCUSD (broker-dependent)
 
 BUNDLE_PATH = SERVER / "decision_engine/models/atlas_btc_validated.pkl"

@@ -7,6 +7,25 @@
 > **Exit:** SL 6×ATR · TRAIL 2×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
 
 
+
+## 🧠 2026-06-09 — kf_age_min 3 → 1 + q_thr 3.0 → 2.0
+
+Diagnosis on today's XAU sharp fall (same Atlas architecture as BTC) showed
+the `kage ≥ 3` requirement was filtering out the 1-2 bar Kalman flips that
+happen during sharp impulse pullbacks. BTC is the most-affected product
+because it's 24/7 with frequent sharp moves.
+
+8-month holdout sweep (per-product, multi-pos sim):
+
+| Variant | Trades | WR | PF | DD | $@0.10 |
+|---|---:|---:|---:|---:|---:|
+| kage≥3 Q≥3.0 (was deployed) | 2,522 | 71.1% | 1.38 | 128 | $34,386 |
+| **kage≥1 Q≥2.0 (deployed)** | **4,308** | **68.7%** | 1.28 | 142 | **+$45,172** |
+
+**+31% $ at +11% DD** — biggest absolute lift of the deployment. WR dips
+2.4pp but trade volume rises 71%, so absolute winners grow meaningfully.
+
+
 ## 🧠 2026-06-09 — No filter applied
 
 Backtest sweep tested time-filter and trend-gate variants — **none beat

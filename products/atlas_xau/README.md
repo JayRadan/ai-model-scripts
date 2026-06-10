@@ -7,6 +7,23 @@
 > **Exit:** SL 6×ATR · TRAIL 2×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
 
 
+
+## 🧠 2026-06-09 — q_thr lowered 2.0 → 1.5 (kage sweep)
+
+After diagnosing today's XAU sharp fall, ran a `kf_age_min` × `q_thr` sweep on
+the 8-month holdout. For XAU the cleanest improvement came from **keeping
+kage≥3 but lowering q_thr from 2.0 to 1.5**:
+
+| Variant | Trades | WR | PF | DD | $@0.10 |
+|---|---:|---:|---:|---:|---:|
+| kage≥3 Q≥2.0 (was deployed) | 2,725 | 65.9% | 1.14 | 261 | $9,769 |
+| **kage≥3 Q≥1.5 (deployed)** | **3,143** | **66.2%** | **1.18** | **239** | **+$13,895** |
+
+**Strict improvement.** +42% $, +4bp WR, +4bp PF, **−8% DD**. The Q model
+already discriminates real pullback-continuation setups from noise; the
+2.0 gate was simply too tight.
+
+
 ## 🧠 2026-06-09 — Time-of-day filter (deployed)
 
 After a 30-day post-deploy backtest sweep, added `time_block_utc=(18, 2)` to

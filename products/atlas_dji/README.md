@@ -7,6 +7,25 @@
 > **Exit:** SL 6×ATR · TRAIL 2×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
 
 
+
+## 🧠 2026-06-09 — kf_age_min 3 → 1 (q_thr unchanged)
+
+Same diagnosis as BTC. The `kage ≥ 3` requirement was rejecting too many
+real setups during sharp DJI moves where Kalman flips for just 1-2 bars
+before the trend resumes.
+
+8-month holdout sweep:
+
+| Variant | Trades | WR | PF | DD | $@0.10 |
+|---|---:|---:|---:|---:|---:|
+| kage≥3 Q≥3.0 (was deployed) | 1,549 | 68.9% | 1.28 | 111 | $5,597 |
+| **kage≥1 Q≥3.0 (deployed)** | **1,846** | 68.2% | **1.32** | 118 | **+$7,588** |
+
+**+36% $ at +6% DD** — cleanest XAU/BTC-style result on DJI. PF and DD
+both improved; only trade-off is a 0.7pp WR drop, more than offset by
+the larger trade count.
+
+
 ## 🧠 2026-06-09 — Time-of-day filter (deployed)
 
 After a 30-day post-deploy backtest sweep, added `time_block_utc=(19, 2)` to

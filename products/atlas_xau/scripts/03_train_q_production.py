@@ -1,23 +1,36 @@
 """
-Atlas XAU — production bundle training.
+Atlas XAU — production bundle training (TRAIL=1.5 RETRAIN, 2026-06-10).
 
-Produces:
-  /home/jay/Desktop/my-agents-and-website/commercial/server/decision_engine/models/atlas_xau_validated.pkl
+CHANGES vs current production (commit before 2026-06-10):
+  • TRAIL=1.5 in label generation (was 2.0)
+  • Architecture, features, hyperparams, MFE filter, holdout cutoff — UNCHANGED
 
-Frozen architecture:
-  - Indicator stack: M1 Kalman regime + M1 Hermes TFK (both bundled)
-  - Entry rule: STRICT candle confirmation + both-lines + MFE>=2R Q training
-      BUY:  Hermes GREEN + Kalman RED + prior strong-bear (body>=0.8xATR)
-            closing BELOW both lines + current green + kf_age>=3
-      SELL: mirror
-  - Exit policy: SL=6xATR, TRAIL=2xATR, MAXH=300, BE @ +0.5R on new-signal
-  - Multi-pos: 4 slots, switch_delta=0.5, cooldown=5
-  - Q model: XGBRegressor trained ONLY on candidates whose forward MFE reached
-             >= 2R, on the FULL parquet (production model, no holdout cutoff)
+WHY:
+  Holdout validation on 8 months (2025-09-01 → 2026-05-01):
+    A: prod Q (trail=2.0 labels) + trail=2.0 exit  → +$770  PF 1.14  DD 169R
+    C: NEW  Q (trail=1.5 labels) + trail=1.5 exit  → +$969  PF 1.24  DD 108R   ⭐ +26% $, -36% DD
+  12-day live validation (2026-05-29 → 2026-06-10):
+    A: +$31    C: +$69 (+121%), DD 50R → 25R (-50%)
+    06-04 cluster day: -$45 → -$2.70 (single biggest single-day improvement: +$42)
+    06-09: -$10 → +$7
+    06-10: -$13 → -$13 (essentially same)
 
-Why full data: this is the production model. The holdout was used to validate
-the architecture; for live deployment we train on every available bar to maximize
-sample size. The frozen architecture is what the holdout validated.
+TO USE:
+  1. Copy this file to products/atlas_xau/scripts/03_train_q_production.py
+     (overwriting the existing one — keep a backup first)
+  2. Update commercial/server/decision_engine/configs/atlas_xau.py:
+        trail_atr: float = 2.0  →  trail_atr: float = 1.5
+  3. Run:
+        cd /home/jay/Desktop/new-model-zigzag
+        python3 products/atlas_xau/scripts/03_train_q_production.py
+     This will overwrite atlas_xau_validated.pkl with the retrained Q.
+  4. Restart/redeploy server.
+
+ROLLBACK:
+  git checkout HEAD~ -- products/atlas_xau/scripts/03_train_q_production.py \
+                       commercial/server/decision_engine/configs/atlas_xau.py
+  (Keep a copy of the old atlas_xau_validated.pkl as
+   atlas_xau_validated.pkl.bak_pre_trail15)
 """
 from __future__ import annotations
 import importlib.util, sys, time, pickle
@@ -27,8 +40,9 @@ import numpy as np, pandas as pd
 from numba import njit
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent.parent
+ROOT = HERE.parent.parent.parent  # /home/jay/Desktop/new-model-zigzag
 sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT / "products/hermes_xau"))
+sys.path.insert(0, str(ROOT / "experiments/kalman_color_flip"))
 from kalman import compute_kalman, bars_in_regime_array
 from tfk import compute_tfk
 _spec = importlib.util.spec_from_file_location("ofm1", ROOT / "products/_shared/m1_with_orderflow.py")
@@ -37,7 +51,7 @@ add_standard_features = _ofm1.add_standard_features
 FLOW_FEATS = list(_ofm1.FLOW_FEATS)
 
 SPREAD = 0.30
-SL, TRAIL, MAXH = 6.0, 2.0, 300
+SL, TRAIL, MAXH = 6.0, 1.5, 300         # ← TRAIL: 2.0 → 1.5 (2026-06-10)
 BE_R = 0.5; MAX_CONC, SWITCH, COOLDOWN = 4, 0.5, 5
 STRONG_ATR = 0.8; RMULT = 1.0; MFE_FILTER = 2.0
 Q_THR = 1.0
@@ -82,7 +96,7 @@ def streak_down(v):
 
 
 def main():
-    print("="*72); print("  Atlas XAU production bundle"); print("="*72)
+    print("="*72); print("  Atlas XAU production bundle  (TRAIL=1.5 retrain, 2026-06-10)"); print("="*72)
     t0=time.time()
     m1=pd.read_parquet(ROOT/"data/m1_xau_orderflow.parquet").sort_values("time").reset_index(drop=True)
     print(f"  loaded {len(m1):,} bars from {m1.time.iloc[0]} -> {m1.time.iloc[-1]}", flush=True)
@@ -108,7 +122,6 @@ def main():
     df["strong_bull_prev"]=np.concatenate([[False],strong_bull[:-1]])
     n=len(df); sp=SPREAD/np.nanmedian(atr)
 
-    # Atlas STRICT candidate detection
     pbk=np.concatenate([[False],C[:-1]<kline[:-1]]); pak=np.concatenate([[False],C[:-1]>kline[:-1]])
     pbt=np.concatenate([[False],C[:-1]<tline[:-1]]); pat=np.concatenate([[False],C[:-1]>tline[:-1]])
     g=C>O; r=C<O
@@ -119,7 +132,7 @@ def main():
     idxs=np.where(mask)[0]; dirs=np.where(cdir[idxs]==1,1,-1).astype(np.int64)
     print(f"  candidates: {len(idxs):,}  (buys {(dirs==1).sum():,}  sells {(dirs==-1).sum():,})", flush=True)
 
-    print("  computing labels (forward pnl_R + MFE) ...", flush=True)
+    print(f"  computing labels with TRAIL={TRAIL} (NEW, was 2.0) ...", flush=True)
     pnl,xit,mfe=labels_with_mfe(idxs,dirs,O,H,L,C,atr,sp,SL,TRAIL,MAXH,n)
     mfe_2r_mask = mfe >= MFE_FILTER
     print(f"  MFE>=2R candidates (production training set): {mfe_2r_mask.sum():,} ({mfe_2r_mask.mean()*100:.1f}%)", flush=True)
@@ -135,7 +148,6 @@ def main():
                    objective="reg:squarederror",tree_method="hist",random_state=42,verbosity=0)
     M.fit(X_train,y_train)
 
-    # Also produce a holdout-only model for the validated_pkl pattern (Hermes does this)
     times=m1["time"].to_numpy(); tmask=times<np.datetime64(HOLDOUT_CUTOFF)
     tr_m=tmask[idxs]; te_m=~tr_m
     hold_train_mask=tr_m & mfe_2r_mask
@@ -146,7 +158,6 @@ def main():
                pnl[hold_train_mask].astype(np.float32))
     q_te = M_hold.predict(df.iloc[idxs[te_m]][feat_cols].fillna(0).to_numpy(np.float32))
 
-    # Compute holdout PF stats for the metadata
     test_pnl=pnl[te_m]
     qm = q_te >= Q_THR
     if qm.sum() > 0:
@@ -162,8 +173,8 @@ def main():
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     payload={
-        "q_model": M,                          # production model, full data
-        "q_model_holdout": M_hold,              # alt model trained pre-2025-09-01 (for re-validation)
+        "q_model": M,
+        "q_model_holdout": M_hold,
         "feat_cols": feat_cols,
         "kalman_params": {"q":0.05,"r_mult":RMULT,"r_len":50,"dt":1.0,"mintick":0.01},
         "tfk_params": {"flow_len":20,"damping":0.93,"mass":1.0,"q_noise":0.001,"r_noise":0.10,
@@ -176,6 +187,7 @@ def main():
                          "switch_delta":SWITCH,"cooldown_bars":COOLDOWN},
         "train_meta": {
             "trained_on": datetime.now(timezone.utc).isoformat(),
+            "trail_atr_for_labels": TRAIL,
             "n_candidates_total": int(len(idxs)),
             "n_train_production": int(mfe_2r_mask.sum()),
             "n_train_holdout": int(hold_train_mask.sum()),
@@ -183,7 +195,7 @@ def main():
             "holdout_cutoff": str(HOLDOUT_CUTOFF),
             "spread_R_train": float(sp),
             "holdout_q1": holdout_q1,
-            "strategy": "Atlas STRICT candle confirm + both-lines + MFE>=2R + multi-pos + BE@+0.5R",
+            "strategy": "Atlas STRICT candle confirm + both-lines + MFE>=2R + multi-pos + BE@+0.5R  (trail=1.5 retrain 2026-06-10)",
             "config_snapshot": {
                 "STRONG_ATR":STRONG_ATR,"MFE_FILTER":MFE_FILTER,
                 "SL":SL,"TRAIL":TRAIL,"MAX_HOLD":MAXH,"BE_R":BE_R,

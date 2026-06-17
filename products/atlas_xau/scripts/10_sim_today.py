@@ -1,301 +1,257 @@
 """
-10_sim_today.py — Atlas XAU live-equivalent simulation for the current trading day
+10_sim_today.py — Atlas XAU live-equivalent simulation for the current day.
 
-WHAT THIS DOES
-==============
-Pulls fresh Dukascopy XAU/USD M1 bars for the last 3 days, runs Atlas's
-STRICT-candle-reversal entry rule + the deployed Q model, and reports
-every trade Atlas would have opened today plus its outcome.
+2026-06-17: REWRITTEN for the new ushape_m15 architecture (M15 macro Kalman
++ M1 Kalman U-shape edge entry). Replaces the prior STRICT-2-bar-reversal sim.
 
-DEPLOYED CONFIG MIRRORED (commercial/server/decision_engine/configs/atlas_xau.py)
-================================================================================
-  symbol_base:    XAUUSD
-  q_thr:          1.5     (lowered 2.0 → 1.5 on 2026-06-09 after kage sweep.
-                           kage≥3 + Q≥1.5 beats Q≥2.0: +42% $, −8% DD on
-                           8-month holdout. Q model discriminates well enough
-                           that lowering the gate lets valid entries through.)
-  strong_body:    0.8 ATR (entry needs a "strong" previous candle: body >= 0.8 ATR)
-  kf_age_min:     3       (Kalman opposite color age >= 3 bars — unchanged)
-  require_both:   true    (close must be on the correct side of BOTH
-                           the Kalman line AND the Hermes TFK line)
-  sl_hard_atr:    6.0
-  trail_atr:      2.0
-  be_trigger_r:   0.5
-  max_hold_bars:  300
-  max_concurrent: 4 slots, switch_delta=0.5, cooldown=5 bars
-
-ENTRY RULE (STRICT — both indicators in confluence + reversal candle)
-=====================================================================
-BUY when ALL of:
-  • TFK regime is GREEN (cdir == +1)
-  • Kalman regime is RED, age >= 3 bars (kdir == -1)
-  • Previous bar was STRONG BEAR (body >= 0.8 ATR, negative direction)
-  • Previous close BELOW Kalman line AND BELOW TFK line
-  • Current bar prints GREEN (close > open)
-
-SELL when ALL of:
-  • TFK regime is RED (cdir == -1)
-  • Kalman regime is GREEN, age >= 3 bars (kdir == +1)
-  • Previous bar was STRONG BULL (body >= 0.8 ATR, positive direction)
-  • Previous close ABOVE Kalman line AND ABOVE TFK line
-  • Current bar prints RED (close < open)
-
-LIMITATIONS — OFFLINE, NOT EXACTLY THE DEPLOYED SERVER
-======================================================
-  • Order-flow features are zeroed (live uses tick stream)
-  • Regime gating not applied
-For exact live trades, query the funnel_log via /decide/_log-dump.
-
-USAGE
-=====
-    python3 products/atlas_xau/scripts/10_sim_today.py
+Pipeline:
+  1. load deployed bundle (atlas_xau_validated.pkl, M15 U-shape Q)
+  2. fetch last ~3 days of M1 XAU from Dukascopy
+  3. compute features (M1 TFK+std+Kalman + M15 Kalman causal forward-fill)
+  4. build candidates (edge-detected U-shape, M15 macro filter)
+  5. predict Q, multi-pos sim with same rules as decide_atlas
+  6. filter to today's entries, print PnL summary
 """
-import importlib.util, sys, pickle
+from __future__ import annotations
+import sys, time, importlib.util, pickle
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import numpy as np
-import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from numba import njit
-
-ROOT = Path("/home/jay/Desktop/new-model-zigzag")
-SERVER = Path("/home/jay/Desktop/my-agents-and-website/commercial/server")
-sys.path.insert(0, str(ROOT / "experiments/kalman_color_flip"))
-sys.path.insert(0, str(ROOT / "products/hermes_xau"))
-from kalman import compute_kalman, bars_in_regime_array
-from tfk import compute_tfk
-_spec = importlib.util.spec_from_file_location(
-    "ofm1", ROOT / "products/_shared/m1_with_orderflow.py")
-_of = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_of)
-add_standard_features = _of.add_standard_features
-FLOW = list(_of.FLOW_FEATS)
+import numpy as np, pandas as pd
 import dukascopy_python
 
-# ── DEPLOYED CONFIG ────────────────────────────────────────────────────
-SPREAD       = 0.30
-SL_ATR       = 6.0
-TRAIL_ATR    = 2.0
-MAX_HOLD     = 300
-BE_R         = 0.5
-MAX_CONC     = 4
-SWITCH_DELTA = 0.5
-COOLDOWN     = 5
-STRONG_ATR   = 0.8       # strong-body threshold for the prior bar
-RMULT        = 1.0       # Kalman R multiplier
-KF_AGE_MIN   = 3
-Q_THR        = 1.5       # lowered 2.0 → 1.5 on 2026-06-09 (kage sweep)
-TIME_BLOCK   = (18, 2)   # 2026-06-09 — block entries at UTC hours [18, 2)
-                         # +98% $ vs no filter; DD -58%. (0, 0) = disabled
-TREND_SLOPE_BLOCK = 0.0  # disabled on Atlas XAU
-R_to_USD     = 1.50      # 0.01 lot XAUUSD
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent.parent.parent
+SERVER = Path("/home/jay/Desktop/my-agents-and-website/commercial/server")
+sys.path.insert(0, str(ROOT / "products/hermes_xau"))
+sys.path.insert(0, str(ROOT / "experiments/kalman_color_flip"))
+from tfk import compute_tfk
+from kalman import compute_kalman
+_spec = importlib.util.spec_from_file_location("ofm1", ROOT / "products/_shared/m1_with_orderflow.py")
+_ofm1 = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_ofm1)
+add_standard_features = _ofm1.add_standard_features
 
 BUNDLE_PATH = SERVER / "decision_engine/models/atlas_xau_validated.pkl"
+SPREAD       = 0.30
+SL           = 6.0
+TRAIL        = 1.0
+MAX_HOLD     = 300
+MAX_CONCURRENT = 4
+SWITCH_DELTA = 0.5
+COOLDOWN_BARS = 5
+PROFIT_TO_BE_R = 0.5
+Q_THR        = 1.5          # matches deployed cfg.q_thr
+R_to_USD     = 1.50         # 0.01 lot XAUUSD
+KAL = dict(q=0.05, r_mult=1.0, r_len=50, dt=1.0, mintick=0.01)
 
 
-def streak_up(v):
-    n = len(v); o = np.zeros(n, np.int32); c = 0
-    for i in range(1, n):
-        c = c + 1 if v[i] > v[i - 1] else 0
-        o[i] = c
-    return o
-
-
-# ── 1. Fetch 3 days of XAU/USD M1 ──────────────────────────────────────
-end = datetime.now(timezone.utc)
-start = end - timedelta(days=3)
-print(f"[atlas_xau] Fetching XAU/USD M1 {start.isoformat()} → {end.isoformat()}")
-df = dukascopy_python.fetch(instrument="XAU/USD", interval=dukascopy_python.INTERVAL_MIN_1,
-                             offer_side=dukascopy_python.OFFER_SIDE_BID, start=start, end=end)
-df = df.reset_index().rename(columns={"timestamp": "time"})
-df["time"] = pd.to_datetime(df["time"]).dt.tz_convert("UTC").dt.tz_localize(None)
-df = df.sort_values("time").reset_index(drop=True)
-if "tick_volume" not in df.columns:
-    vc = "volume" if "volume" in df.columns else [c for c in df.columns if "vol" in c.lower()][0]
-    df["tick_volume"] = df[vc]
-print(f"  fetched {len(df):,} bars  last bar: {df.time.iloc[-1]}")
-
-# ── 2. Features (TFK + Kalman + Atlas-specific) ────────────────────────
-tfk_df = compute_tfk(df)
-kf = compute_kalman(df, r_mult=RMULT)
-fdf = add_standard_features(kf)
-for c in ["force", "velocity", "x_est", "regime_w", "trend_raw", "trend", "committed_dir"]:
-    fdf[c] = tfk_df[c].to_numpy()
-fdf["tfk_line"] = tfk_df["tfk_line"].to_numpy()
-
-O = df["open"].to_numpy(float); H = df["high"].to_numpy(float)
-L = df["low"].to_numpy(float); C = df["close"].to_numpy(float)
-atr = fdf["atr14"].to_numpy(float)
-kdir = fdf["kf_dir"].to_numpy(np.int64)
-kline = fdf["kf_p"].to_numpy(float)
-cdir = tfk_df["committed_dir"].to_numpy(np.int64)
-tline = tfk_df["tfk_line"].to_numpy(float)
-vel = fdf["f_velRaw"].to_numpy(float)
-kage = bars_in_regime_array(kdir)
-fdf["kf_regime_age"] = kage
-fdf["bar_range_atr"] = (H - L) / np.maximum(atr, 1e-9)
-fdf["dist_kf"] = np.where(atr > 0, (C - kline) / atr, 0.0)
-fdf["dist_tfk"] = np.where(atr > 0, (C - tline) / atr, 0.0)
-fdf["vel_up_streak"] = streak_up(vel)
-body = C - O
-body_atr = np.where(atr > 0, np.abs(body) / atr, 0.0)
-fdf["body_atr"] = body_atr
-sb = (body < 0) & (body_atr >= STRONG_ATR)  # strong bear bar
-su = (body > 0) & (body_atr >= STRONG_ATR)  # strong bull bar
-fdf["strong_bear_prev"] = np.concatenate([[False], sb[:-1]])
-fdf["strong_bull_prev"] = np.concatenate([[False], su[:-1]])
-n = len(fdf)
-sp = SPREAD / np.nanmedian(atr)
-
-# ── 3. STRICT candle reversal rule ──────────────────────────────────────
-pbk = np.concatenate([[False], C[:-1] < kline[:-1]])  # prev close below Kalman
-pak = np.concatenate([[False], C[:-1] > kline[:-1]])  # prev close above Kalman
-pbt = np.concatenate([[False], C[:-1] < tline[:-1]])  # prev close below TFK
-pat = np.concatenate([[False], C[:-1] > tline[:-1]])  # prev close above TFK
-g = C > O  # green candle
-r = C < O  # red candle
-ok = np.isfinite(atr) & (atr > 0)
-ok[:250] = False; ok[-(MAX_HOLD + 1):] = False
-buy = ok & (cdir == 1) & (kdir == -1) & (fdf["strong_bear_prev"].to_numpy()) & pbk & pbt & g & (kage >= KF_AGE_MIN)
-sell = ok & (cdir == -1) & (kdir == 1) & (fdf["strong_bull_prev"].to_numpy()) & pak & pat & r & (kage >= KF_AGE_MIN)
-mask = buy | sell
-idxs = np.where(mask)[0]
-dirs = np.where(cdir[idxs] == 1, 1, -1).astype(np.int64)
-print(f"  Atlas candidates over 3-day window: {len(idxs)}")
-
-# ── 4. Q score, gate ────────────────────────────────────────────────────
-bundle = pickle.load(open(BUNDLE_PATH, "rb"))
-M = bundle["q_model"]; feat_cols = bundle["feat_cols"]
-for f in FLOW:
-    if f not in fdf.columns: fdf[f] = 0.0
-Xall = fdf[feat_cols].fillna(0).to_numpy(np.float32)
-q_live = M.predict(Xall[idxs])
-print(f"  Q dist: median={np.median(q_live):.2f}  p75={np.quantile(q_live, 0.75):.2f}  max={q_live.max():.2f}")
-print(f"  candidates with Q >= {Q_THR}: {int((q_live >= Q_THR).sum())}")
-
-times = df["time"].to_numpy()
-
-# ── 5. Multi-pos sim with BE, switch, cooldown ─────────────────────────
-active = []; executed = []
-last_open = {-1: -10**9, 1: -10**9}
-# Apply Q threshold + time filter (matches deployed config)
-def passes_filters(k):
-    if q_live[k] < Q_THR: return False
-    if TIME_BLOCK != (0, 0):
-        h = pd.Timestamp(df["time"].iloc[idxs[k]]).hour
-        s, e = TIME_BLOCK
-        blocked = (s <= h < e) if s < e else (h >= s or h < e)
-        if blocked: return False
-    return True
-
-info = {int(idxs[k]): (int(dirs[k]), float(q_live[k]))
-        for k in range(len(idxs)) if passes_filters(k)}
-if not info:
-    print("  no Atlas candidates passed q_thr filter")
-    sys.exit(0)
-b0 = min(info.keys()); b1 = min(max(info.keys()) + MAX_HOLD + 1, n)
-
-for i in range(b0, b1):
-    still = []
-    for t in active:
-        if i <= t["entry_idx"]: still.append(t); continue
-        if i > min(t["entry_idx"] + MAX_HOLD, n - 1):
-            cp = C[min(t["entry_idx"] + MAX_HOLD, n - 1)]
-            t["pnl_R"] = float(t["dir"] * (cp - t["ep"]) / t["a"] - sp)
-            t["exit_idx"] = min(t["entry_idx"] + MAX_HOLD, n - 1)
-            t["exit_px"] = cp; t["exit_reason"] = "max_hold"
-            executed.append(t); continue
-        dd = t["dir"]; ep = t["ep"]; a = t["a"]; fav = dd * (C[i] - ep)
-        if fav > t["mf"]: t["mf"] = fav
-        hit = False
-        if t["sl_r"] == 0:
-            if dd == 1 and L[i] <= ep:
-                t["pnl_R"] = -sp; t["exit_px"] = ep; t["exit_reason"] = "BE"; hit = True
-            elif dd == -1 and H[i] >= ep:
-                t["pnl_R"] = -sp; t["exit_px"] = ep; t["exit_reason"] = "BE"; hit = True
+def simulate_label_R(entry_idx, direction, C, H, L, O, a, spread_R):
+    n = len(C)
+    if entry_idx >= n-1 or not (np.isfinite(a) and a > 0): return np.nan, None, "warmup"
+    ep = O[entry_idx]
+    hard = SL*a; trail_d = TRAIL*a; max_favor = 0.0
+    end = min(entry_idx + MAX_HOLD, n-1)
+    for k in range(entry_idx, end+1):
+        favor_now = direction*(C[k] - ep)
+        if favor_now > max_favor: max_favor = favor_now
+        if direction == 1:
+            if (ep - L[k]) >= hard: return -SL - spread_R, k, "hard_sl"
         else:
-            dist = abs(t["sl_r"]) * a
-            if dd == 1 and (ep - L[i]) >= dist:
-                t["pnl_R"] = float(t["sl_r"] - sp); t["exit_px"] = ep - dist; t["exit_reason"] = "SL"; hit = True
-            elif dd == -1 and (H[i] - ep) >= dist:
-                t["pnl_R"] = float(t["sl_r"] - sp); t["exit_px"] = ep + dist; t["exit_reason"] = "SL"; hit = True
-        if hit: t["exit_idx"] = i; executed.append(t); continue
-        td_ = TRAIL_ATR * a
-        if t["mf"] >= td_ and (t["mf"] - fav) >= td_:
-            xp = ep + dd * (t["mf"] - td_)
-            t["pnl_R"] = float((t["mf"] - td_) / a - sp)
-            t["exit_idx"] = i; t["exit_px"] = xp; t["exit_reason"] = "trail"
-            executed.append(t); continue
-        still.append(t)
-    active = still
-    if i not in info: continue
-    d_, q_ = info[i]
-    if i - last_open[d_] < COOLDOWN: continue
-    for t in active:
-        if t["sl_r"] == 0: continue
-        cur = t["dir"] * (C[i] - t["ep"]) / t["a"]
-        if cur >= BE_R: t["sl_r"] = 0; t["be_moved_at"] = i
-    ei = i + 1
-    if ei >= n or not (np.isfinite(atr[i]) and atr[i] > 0): continue
-    if len(active) >= MAX_CONC:
-        worst = min(active, key=lambda x: x["q"])
-        if q_ >= worst["q"] + SWITCH_DELTA:
-            worst["pnl_R"] = float(worst["dir"] * (C[i] - worst["ep"]) / worst["a"] - sp)
-            worst["exit_idx"] = i; worst["exit_px"] = C[i]; worst["exit_reason"] = "switch_closed"
-            executed.append(worst); active.remove(worst)
-        else: continue
-    active.append({"sig_idx": i, "entry_idx": ei, "entry_time": pd.Timestamp(times[ei]),
-                   "dir": d_, "ep": float(O[ei]), "a": float(atr[i]),
-                   "sl_r": float(-SL_ATR), "mf": 0.0, "q": float(q_), "pnl_R": None})
-    last_open[d_] = i
+            if (H[k] - ep) >= hard: return -SL - spread_R, k, "hard_sl"
+        if max_favor >= trail_d:
+            if (max_favor - favor_now) >= trail_d:
+                return (max_favor - trail_d)/a - spread_R, k, "trail"
+    return direction*(C[end]-ep)/a - spread_R, end, "max_hold"
 
-for t in active:
-    eb = min(t["entry_idx"] + MAX_HOLD, n - 1)
-    t["pnl_R"] = float(t["dir"] * (C[eb] - t["ep"]) / t["a"] - sp)
-    t["exit_idx"] = eb; t["exit_px"] = C[eb]; t["exit_reason"] = "open_at_now"
-    executed.append(t)
 
-# ── 6. Filter to today + summary ───────────────────────────────────────
-today_date = df.time.iloc[-1].date()
-today = [t for t in executed if pd.Timestamp(t["entry_time"]).date() == today_date]
-today.sort(key=lambda t: t["entry_time"])
+def main():
+    t0 = time.time()
+    print(f"[atlas_xau] loading bundle ...")
+    bundle = pickle.load(open(BUNDLE_PATH, "rb"))
+    feat_cols = bundle["feat_cols"]
+    macro_tf = bundle["atlas_params"].get("macro_tf_min", 15)
+    q_thr = bundle["atlas_params"].get("q_thr", Q_THR)
 
-print(f"\n=== Atlas XAU sim — {today_date} ===")
-print(f"({len(today)} trades opened today)")
-if not today:
-    print("(no Atlas trades fired today)")
-    sys.exit(0)
+    end = datetime.now(timezone.utc).replace(microsecond=0)
+    start = end - timedelta(days=3)
+    print(f"[atlas_xau] Fetching XAU/USD M1 {start.isoformat()} → {end.isoformat()}")
+    df = dukascopy_python.fetch(instrument="XAU/USD", interval=dukascopy_python.INTERVAL_MIN_1,
+                                 offer_side=dukascopy_python.OFFER_SIDE_BID, start=start, end=end)
+    df = df.reset_index().rename(columns={"timestamp": "time"})
+    df["time"] = pd.to_datetime(df["time"]).dt.tz_convert("UTC").dt.tz_localize(None)
+    df = df.sort_values("time").reset_index(drop=True)
+    if "tick_volume" not in df.columns:
+        vc = "volume" if "volume" in df.columns else [c for c in df.columns if "vol" in c.lower()][0]
+        df["tick_volume"] = df[vc]
+    print(f"  fetched {len(df):,} bars  last bar: {df.time.iloc[-1]}")
 
-rs = np.array([t["pnl_R"] for t in today])
-wins = int((rs > 0).sum())
-pf = float(rs[rs > 0].sum() / max(-rs[rs <= 0].sum(), 1e-9)) if (rs <= 0).any() else float("inf")
-eq = np.cumsum(rs); dd_R = float((np.maximum.accumulate(eq) - eq).max())
+    print(f"  computing features ...")
+    fdf = compute_tfk(df)
+    fdf = add_standard_features(fdf)
+    fdf = compute_kalman(fdf, **KAL)
+    # M15 Kalman causal
+    g = fdf.set_index("time")[["open","high","low","close","tick_volume"]].resample(f"{macro_tf}min").agg(
+        {"open":"first","high":"max","low":"min","close":"last","tick_volume":"sum"}).dropna().reset_index()
+    g = compute_kalman(g, **KAL)
+    g["end"] = g["time"] + pd.Timedelta(minutes=macro_tf)
+    j = np.searchsorted(g["end"].values, fdf["time"].values, side="right") - 1
+    valid_j = j >= 0
+    jj = np.clip(j, 0, len(g)-1)
+    fdf[f"kf_p_m{macro_tf}"]     = np.where(valid_j, g["kf_p"].to_numpy()[jj], np.nan)
+    fdf[f"kf_dir_m{macro_tf}"]   = np.where(valid_j, g["kf_dir"].to_numpy()[jj], 0).astype(np.int64)
+    fdf[f"kf_v_m{macro_tf}"]     = np.where(valid_j, g["kf_v"].to_numpy()[jj], 0.0)
+    fdf[f"f_accel_m{macro_tf}"]  = np.where(valid_j, g["f_accel"].to_numpy()[jj], 0.0)
+    fdf[f"f_velPct_m{macro_tf}"] = np.where(valid_j, g["f_velPct"].to_numpy()[jj], 0.0)
+    atr_arr = fdf["atr14"].to_numpy(np.float64)
+    C_arr = fdf["close"].to_numpy(np.float64)
+    fdf[f"dist_m{macro_tf}kf"] = np.where(atr_arr > 0,
+        (C_arr - fdf[f"kf_p_m{macro_tf}"].to_numpy(np.float64)) / atr_arr, 0.0)
+    # kv_pos_50
+    kv_s = pd.Series(fdf["kf_v"].to_numpy(np.float64))
+    kv_min50 = kv_s.rolling(50, min_periods=20).min().fillna(0).to_numpy()
+    kv_max50 = kv_s.rolling(50, min_periods=20).max().fillna(0).to_numpy()
+    fdf["kv_pos_50"] = (kv_s.to_numpy() - kv_min50) / np.maximum(kv_max50 - kv_min50, 1e-9)
+    # bar_range_atr
+    H_arr = fdf["high"].to_numpy(np.float64); L_arr = fdf["low"].to_numpy(np.float64)
+    fdf["bar_range_atr"] = (H_arr - L_arr) / np.maximum(atr_arr, 1e-9)
 
-print(f"sumR {rs.sum():+.2f} | WR {wins / len(rs) * 100:.1f}% | PF {pf:.2f} | DD {dd_R:.2f}R")
-print(f"Estimated USD @ 0.01 lot: {rs.sum() * R_to_USD:+.2f} (DD ${dd_R * R_to_USD:.2f})")
-print(f"Estimated USD @ 0.10 lot: {rs.sum() * R_to_USD * 10:+.2f} (DD ${dd_R * R_to_USD * 10:.2f})")
-print()
-print(f"{'#':>3} {'entry_time':>17} {'dir':>4} {'entry_px':>9} {'exit_time':>17} {'exit_px':>9} {'atr':>5} {'Q':>5} {'R':>7} {'reason':>10} {'BE?':>4}")
-for k, t in enumerate(today):
-    et = pd.Timestamp(times[t["exit_idx"]])
-    be = "yes" if t.get("be_moved_at") is not None else ""
-    print(f"{k:>3} {t['entry_time'].strftime('%Y-%m-%d %H:%M'):>17} {'BUY' if t['dir'] == 1 else 'SELL':>4} "
-          f"{t['ep']:>9.3f} {et.strftime('%Y-%m-%d %H:%M'):>17} {t['exit_px']:>9.3f} "
-          f"{t['a']:>5.2f} {t['q']:>5.2f} {t['pnl_R']:>+7.2f} {t['exit_reason']:>10} {be:>4}")
+    # build edge-detected candidates
+    kd15 = fdf[f"kf_dir_m{macro_tf}"].to_numpy(np.int64)
+    kd1  = fdf["kf_dir"].to_numpy(np.int64)
+    kv1  = fdf["kf_v"].to_numpy(np.float64)
+    fa1  = fdf["f_accel"].to_numpy(np.float64)
+    buy_raw  = (kd15 == +1) & (kd1 == -1) & (kv1 < 0) & (fa1 > 0)
+    sell_raw = (kd15 == -1) & (kd1 == +1) & (kv1 > 0) & (fa1 < 0)
+    buy_edge  = buy_raw  & ~np.concatenate([[False], buy_raw[:-1]])
+    sell_edge = sell_raw & ~np.concatenate([[False], sell_raw[:-1]])
+    valid = np.isfinite(atr_arr) & (atr_arr > 0)
+    valid[:500] = False; valid[-(MAX_HOLD+1):] = False
+    mask = (buy_edge | sell_edge) & valid
+    cand_idxs = np.where(mask)[0]
+    cand_dirs = np.where(buy_edge[cand_idxs], +1, -1).astype(np.int64)
+    print(f"  U-shape edge candidates over 3-day window: {len(cand_idxs)}")
+    if len(cand_idxs) == 0:
+        print("  no candidates"); return
 
-# ── 7. Save equity PNG ─────────────────────────────────────────────────
-out_dir = ROOT / "products/atlas_xau/scripts/_out"
-out_dir.mkdir(parents=True, exist_ok=True)
-fig, ax = plt.subplots(figsize=(13, 5))
-eq_usd = eq * R_to_USD
-eq_times = [t["entry_time"] for t in today]
-ax.plot(eq_times, eq_usd, lw=1.8, color="#0ea5e9", marker="o", markersize=4)
-ax.axhline(0, color="k", lw=0.7)
-ax.set_title(f"Atlas XAU sim {today_date} — {len(today)} trades, WR {wins / len(rs) * 100:.1f}%, "
-             f"PF {pf:.2f}, ${rs.sum() * R_to_USD:+.2f} @ 0.01 lot", fontsize=12)
-ax.set_ylabel("Cumulative profit ($)")
-plt.tight_layout()
-out_png = out_dir / "sim_today.png"
-plt.savefig(out_png, dpi=110)
-print(f"\nwrote {out_png}")
+    # predict Q in bundle's feat_cols order
+    X_rows = []
+    for i in cand_idxs:
+        row = []
+        for f in feat_cols:
+            v = fdf.iloc[i].get(f, 0.0) if f in fdf.columns else 0.0
+            row.append(float(v) if (v is not None and not pd.isna(v)) else 0.0)
+        X_rows.append(row)
+    X = np.array(X_rows, dtype=np.float32)
+    # Prefer the holdout-trained Q for live calibration (matches the model
+    # whose Q distribution q_thr was tuned against in backtest).
+    q_mdl_live = bundle.get("q_model_holdout") or bundle["q_model"]
+    q_arr = q_mdl_live.predict(X)
+    q_by_idx = {int(cand_idxs[k]): float(q_arr[k]) for k in range(len(cand_idxs))}
+    dir_by_idx = {int(cand_idxs[k]): int(cand_dirs[k]) for k in range(len(cand_idxs))}
+    print(f"  Q dist: median={np.median(q_arr):.2f}  p75={np.percentile(q_arr,75):.2f}  max={np.max(q_arr):.2f}")
+    print(f"  candidates with Q >= {q_thr}: {int((q_arr>=q_thr).sum())}")
+
+    # multi-pos sim
+    O_arr = fdf["open"].to_numpy(np.float64)
+    times = fdf["time"].to_numpy()
+    spread_R = SPREAD / np.nanmedian(atr_arr)
+    n = len(fdf)
+    active = []; executed = []
+    last_open = {-1: -10**9, +1: -10**9}
+    cand_set = set(int(i) for i in cand_idxs)
+    bar_start = int(cand_idxs[0]); bar_end = min(int(cand_idxs[-1]) + MAX_HOLD + 1, n)
+    for i in range(bar_start, bar_end):
+        still = []
+        for t in active:
+            if i < t["entry_idx"]: still.append(t); continue
+            if i > min(t["entry_idx"] + MAX_HOLD, n-1):
+                cp = C_arr[min(t["entry_idx"] + MAX_HOLD, n-1)]
+                t["pnl_R"] = float(t["direction"]*(cp-t["ep"])/t["a"] - spread_R)
+                t["exit_reason"] = "max_hold"; t["exit_time"] = pd.Timestamp(times[i]); t["exit_px"] = cp
+                executed.append(t); continue
+            d = t["direction"]; ep = t["ep"]; a = t["a"]
+            favor_now = d*(C_arr[i] - ep)
+            if favor_now > t["max_favor"]: t["max_favor"] = favor_now
+            sl_r = t["sl_r"]; hit = False
+            if sl_r == 0:
+                if d == 1 and L_arr[i] <= ep:  t["pnl_R"] = -spread_R; t["exit_reason"] = "BE"; hit = True
+                elif d == -1 and H_arr[i] >= ep: t["pnl_R"] = -spread_R; t["exit_reason"] = "BE"; hit = True
+            else:
+                dist_r = abs(sl_r)*a
+                if d == 1 and (ep - L_arr[i]) >= dist_r:
+                    t["pnl_R"] = float(sl_r - spread_R); t["exit_reason"] = "SL"; hit = True
+                elif d == -1 and (H_arr[i] - ep) >= dist_r:
+                    t["pnl_R"] = float(sl_r - spread_R); t["exit_reason"] = "SL"; hit = True
+            if hit:
+                t["exit_time"] = pd.Timestamp(times[i]); t["exit_px"] = float(C_arr[i])
+                executed.append(t); continue
+            trail_d = TRAIL*a
+            if t["max_favor"] >= trail_d and (t["max_favor"] - favor_now) >= trail_d:
+                t["pnl_R"] = float((t["max_favor"] - trail_d)/a - spread_R)
+                t["exit_reason"] = "trail"
+                t["exit_time"] = pd.Timestamp(times[i]); t["exit_px"] = float(C_arr[i])
+                executed.append(t); continue
+            still.append(t)
+        active = still
+        if i not in cand_set: continue
+        if q_by_idx.get(i, -1e9) < q_thr: continue
+        direction = dir_by_idx[i]
+        if direction == 0: continue
+        if i - last_open[direction] < COOLDOWN_BARS: continue
+        for t in active:
+            if t["sl_r"] == 0: continue
+            cur_R = t["direction"]*(C_arr[i] - t["ep"])/t["a"]
+            if cur_R >= PROFIT_TO_BE_R: t["sl_r"] = 0
+        entry_idx = i + 1
+        if entry_idx >= n: continue
+        a_new = atr_arr[i]
+        if not (np.isfinite(a_new) and a_new > 0): continue
+        if len(active) >= MAX_CONCURRENT:
+            worst = min(active, key=lambda x: x["q"])
+            if q_by_idx[i] >= worst["q"] + SWITCH_DELTA:
+                cp = C_arr[i]
+                worst["pnl_R"] = float(worst["direction"]*(cp-worst["ep"])/worst["a"] - spread_R)
+                worst["exit_reason"] = "switch_closed"
+                worst["exit_time"] = pd.Timestamp(times[i]); worst["exit_px"] = float(cp)
+                executed.append(worst); active.remove(worst)
+            else: continue
+        active.append({
+            "signal_idx": i, "entry_idx": entry_idx, "direction": direction,
+            "ep": float(O_arr[entry_idx]), "a": float(a_new),
+            "sl_r": float(-SL), "max_favor": 0.0, "q": float(q_by_idx[i]),
+            "entry_time": pd.Timestamp(times[entry_idx]),
+        })
+        last_open[direction] = i
+
+    # filter to today
+    today_date = pd.Timestamp(times[-1]).date()
+    today = [t for t in executed if t.get("entry_time") and pd.Timestamp(t["entry_time"]).date() == today_date]
+    today.sort(key=lambda t: t["entry_time"])
+    print(f"\n=== Atlas XAU sim — {today_date} ===")
+    print(f"({len(today)} trades opened today)")
+    if not today:
+        print("(no Atlas XAU trades fired today)")
+        return
+    R_today = np.array([t["pnl_R"] for t in today if t.get("pnl_R") is not None])
+    if len(R_today) > 0:
+        w, l = R_today[R_today>0], R_today[R_today<=0]
+        pf = float(w.sum()/max(-l.sum(), 1e-9))
+        eq = np.cumsum(R_today); dd = float((np.maximum.accumulate(eq) - eq).max())
+        usd01 = sum(t["pnl_R"]*t["a"]*R_to_USD for t in today)
+        usd10 = usd01*10
+        dd_usd = dd * float(np.mean([t["a"] for t in today])) * R_to_USD
+        print(f"sumR {R_today.sum():+.2f} | WR {(R_today>0).mean()*100:.1f}% | PF {pf:.2f} | DD {dd:.2f}R")
+        print(f"Estimated USD @ 0.01 lot: {usd01:+.2f} (DD ${dd_usd:.2f})")
+        print(f"Estimated USD @ 0.10 lot: {usd10:+.2f} (DD ${dd_usd*10:.2f})")
+    print()
+    print(f"  {'#':>2} {'entry_time':>16} {'dir':>4} {'entry_px':>9} {'exit_time':>17} {'exit_px':>9} {'atr':>5} {'Q':>5} {'R':>7} {'reason':>10}")
+    for k, t in enumerate(today):
+        et = t["entry_time"].strftime("%Y-%m-%d %H:%M")
+        xt = t["exit_time"].strftime("%Y-%m-%d %H:%M") if t.get("exit_time") else "(open)"
+        print(f"  {k:>2} {et:>16} {('BUY' if t['direction']==1 else 'SELL'):>4} "
+              f"{t['ep']:>9.3f} {xt:>17} {t.get('exit_px', 0):>9.3f} "
+              f"{t['a']:>5.2f} {t['q']:>5.2f} {t['pnl_R']:>+7.2f} {t.get('exit_reason', ''):>10}")
+    print(f"\n[done] {time.time()-t0:.0f}s")
+
+
+if __name__ == "__main__":
+    main()

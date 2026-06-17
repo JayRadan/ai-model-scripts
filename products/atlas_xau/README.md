@@ -1,10 +1,97 @@
-# Atlas XAU — M1 Kalman + TFK Dual-Indicator STRICT Reversal
+# Atlas XAU — M15 Macro Kalman + M1 U-shape Reversal
 
-> **Version:** v1 (deployed 2026-06-02)
-> **Architecture:** Kalman state-space regime + Hermes TFK confluence + STRICT 2-bar reversal candle
-> **Bundle:** `atlas_xau_validated.pkl` (Q-regressor trained on MFE≥2R movers)
-> **Entry gate:** STRICT pattern + Q ≥ **2.0** (raised from 1.0 on 2026-06-04)
-> **Exit:** SL 6×ATR · TRAIL 2×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
+> **Version:** **ushape_m15** (deployed 2026-06-17) — replaces prior STRICT-candle architecture
+> **Architecture:** M15 Kalman macro regime + M1 Kalman U-shape edge-detected reversal
+> **Bundle:** `atlas_xau_validated.pkl` (40-feature Q-regressor, M15 + M1 Kalman state)
+> **Entry rule:** BUY iff M15 kf_dir=+1 AND M1 kf_dir=−1 AND M1 kf_v<0 AND M1 f_accel>0 AND edge-bar; SELL mirror.
+> **Q threshold:** Q ≥ **1.5** (q_model_holdout used at inference for calibration consistency)
+> **Exit:** SL 6×ATR · TRAIL 1.0×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
+> **Rollback:** `cp atlas_xau_validated.pkl.bak_pre_m15_ushape_2026-06-17 atlas_xau_validated.pkl` + revert decide_atlas/atlas_features/configs.
+
+## 🆕 2026-06-17 — Full architecture replacement: ushape_m15
+
+Replaces the prior STRICT 2-bar reversal candle (TFK + M1 Kalman confluence
++ strong-body-prev-bar) with a regime-disagreement reversal pattern:
+
+| Component | Before (strict_candle) | Now (ushape_m15) |
+|---|---|---|
+| Macro regime | M1 TFK committed_dir | **M15 Kalman kf_dir** (causal forward-fill) |
+| Entry trigger | Strong bear/bull prev bar + close past Kalman line + current bar follow-through | **M1 Kalman U-shape edge** (velocity bottomed, accel turning) against macro |
+| Direction | Opposite to TFK committed_dir | Same as M15 macro (catches reversal back to macro trend) |
+| Trade rate (8mo backtest) | ~9-14/day | ~9/day @ Q≥1.5 (~18/day @ Q≥1.0) |
+| PF (8mo holdout) | 1.23 | **1.24** (similar) |
+| $ @ 0.10 lot (8mo) | $13,895 | **$21,912** (+58%) |
+| DD | 108R | 153R (+42%) |
+| WR | 69.8% | 72.4% |
+
+### 14-day live sim validation (2026-06-03 → 2026-06-17)
+
+170 trades · WR 72.9% · sumR +69.5R · **+$3,215 @ 0.10 lot** · ~14 trd/day
+· 8 green days vs 4 red days · max peak-to-trough DD ~$1,100
+
+| Date | Trades | WR | $@0.10 |
+|---|---:|---:|---:|
+| 06-03 | 24 | 45.8% | −$1,186 |
+| 06-05 | 29 | 86.2% | +$1,963 |
+| 06-09 | 17 | 94.1% | +$1,440 |
+| 06-10 | 43 | 76.7% | +$1,651 |
+| 06-11 | 6 | 50.0% | −$1,103 |
+| 06-17 | 5 | 60.0% | −$97 |
+
+### Files changed in this deploy
+
+| File | Change |
+|---|---|
+| `commercial/server/decision_engine/atlas_features.py` | Added M15 Kalman resample + causal forward-fill (`kf_p_m15`, `kf_dir_m15`, `kf_v_m15`, `f_accel_m15`, `f_velPct_m15`) + `dist_m15kf` + `kv_pos_50` |
+| `commercial/server/decision_engine/decide_atlas.py` | Added `_ushape_macro_signal()`; dispatch via `cfg.entry_mode`; uses `q_model_holdout` at inference for `ushape_m15` |
+| `commercial/server/decision_engine/configs/atlas_xau.py` | `entry_mode="ushape_m15"`, `macro_tf_min=15`, `q_thr=1.5` |
+| `products/atlas_xau/scripts/03_train_q_production.py` | Replaced with M15 U-shape training recipe |
+| `products/atlas_xau/scripts/10_sim_today.py` | Rewritten for new architecture |
+| `models/atlas_xau_validated.pkl` | New 40-feature bundle (backup: `.bak_pre_m15_ushape_2026-06-17`) |
+
+EA changes: **none**. ATL- magic numbers, slot management, switch/BE/cooldown rules unchanged.
+
+---
+
+## Pre-2026-06-17 architecture (archived)
+
+> **Prior version (strict_candle):** STRICT 2-bar reversal candle + Kalman confluence + Q ≥ 1.0
+> **Prior bundle:** `atlas_xau_validated.pkl.bak_pre_m15_ushape_2026-06-17` (54 features)
+
+## 🆕 Current deployed config (2026-06-17)
+
+| Param | Value | Notes |
+|---|---|---|
+| `strong_body_atr` | 0.8 | strong-candle threshold |
+| `kf_age_min` | **4** | rolled back 7 → 4 on 2026-06-17 (kage=7 was net-negative live) |
+| `require_both_lines` | True | bar must close past both Kalman + TFK lines |
+| `q_thr` | **1.0** | lowered 1.5 → 1.0 on 2026-06-17 (more trades + accept lower PF pivot) |
+| `time_block_utc` | (18, 2) | block 18:00–02:00 UTC (NY-pm + Asia) |
+| `trend_slope_block` | 0.0 | disabled |
+| `sl_hard_atr` | 6.0 | |
+| `trail_atr` | **1.0** | tightened 1.5 → 1.0 on 2026-06-16 (DD −42% on 8mo holdout) |
+| `use_orderflow` | True | |
+| `max_concurrent` | 4 | |
+
+### 2026-06-17 — Path B tested, NOT deployed
+Same Path B feature augmentation (19 extra features) that lifted Hermes XAU was
+tested on Atlas XAU and showed **no meaningful discrimination**:
+
+| Q≥  | Baseline PF | Path B PF |
+|-----|-------------|-----------|
+| 1.0 | 1.23        | 1.23      |
+| 2.5 | 1.25        | 1.27      |
+| 4.0 | 1.17        | 0.92      |
+
+Atlas XAU stays on the baseline 54-feature bundle. Experiment kept at
+[experiments/atlas_xau_pathb_experiment.py](../../experiments/atlas_xau_pathb_experiment.py).
+
+### 2026-06-16 — trail 1.5 → 1.0
+8-month backtest: PF 1.39→1.44, DD 116→67R (−42%), WR ~74→77%. Same trade count,
+slight $ drop (−8%) for huge DD improvement. Bundle re-trained on trail=1.5 labels
+(not 1.0) but the exit-only change is robust enough to ship without another retrain.
+
+---
 
 
 

@@ -39,7 +39,11 @@ MAX_CONCURRENT = 4
 SWITCH_DELTA = 0.5
 COOLDOWN_BARS = 5
 PROFIT_TO_BE_R = 0.5
-Q_THR        = 1.5          # matches deployed cfg.q_thr
+Q_THR        = 1.5          # 2026-06-18 dynamic Q: chop default (unchanged for BTC)
+Q_THR_TREND  = 1.0          # 2026-06-18 dynamic Q: looser when trend_strong
+TREND_AGE_MIN     = 30
+TREND_SLOPE_MIN   = 1.0
+TREND_DEMA50_MIN  = 1.0
 R_to_USD     = 2.30         # 0.01 lot BTCUSD (broker-dependent)
 KAL = dict(q=0.05, r_mult=1.0, r_len=50, dt=1.0, mintick=0.01)
 
@@ -147,8 +151,17 @@ def main():
     q_arr = q_mdl_live.predict(X)
     q_by_idx = {int(cand_idxs[k]): float(q_arr[k]) for k in range(len(cand_idxs))}
     dir_by_idx = {int(cand_idxs[k]): int(cand_dirs[k]) for k in range(len(cand_idxs))}
+    # Dynamic Q threshold per candidate based on trend_strong
+    from kalman import bars_in_regime_array as _bira
+    cdir_arr = fdf["committed_dir"].to_numpy(np.int64) if "committed_dir" in fdf.columns else np.zeros(len(fdf), dtype=np.int64)
+    bir = _bira(cdir_arr)
+    sl20 = fdf["slope20"].to_numpy(float); de50 = fdf["dist_ema50"].to_numpy(float)
+    trend_strong = (bir[cand_idxs] >= TREND_AGE_MIN) & (np.abs(sl20[cand_idxs]) >= TREND_SLOPE_MIN) & (np.abs(de50[cand_idxs]) >= TREND_DEMA50_MIN)
+    q_thr_by_idx = {int(cand_idxs[k]): (Q_THR_TREND if trend_strong[k] else Q_THR) for k in range(len(cand_idxs))}
+    pass_q = q_arr >= np.array([Q_THR_TREND if t else Q_THR for t in trend_strong])
     print(f"  Q dist: median={np.median(q_arr):.2f}  p75={np.percentile(q_arr,75):.2f}  max={np.max(q_arr):.2f}")
-    print(f"  candidates with Q >= {q_thr}: {int((q_arr>=q_thr).sum())}")
+    print(f"  trend_strong: {int(trend_strong.sum())} ({100*trend_strong.mean():.0f}%)")
+    print(f"  candidates passing dynamic Q (≥{Q_THR}/chop or ≥{Q_THR_TREND}/trend): {int(pass_q.sum())}")
 
     # multi-pos sim
     O_arr = fdf["open"].to_numpy(np.float64)
@@ -193,7 +206,7 @@ def main():
             still.append(t)
         active = still
         if i not in cand_set: continue
-        if q_by_idx.get(i, -1e9) < q_thr: continue
+        if q_by_idx.get(i, -1e9) < q_thr_by_idx.get(i, q_thr): continue
         direction = dir_by_idx[i]
         if direction == 0: continue
         if i - last_open[direction] < COOLDOWN_BARS: continue

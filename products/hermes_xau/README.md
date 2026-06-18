@@ -1,12 +1,108 @@
 # Hermes XAU — M1 TFK + Order-Flow Q-Regressor
 
-> **Version:** **v103 + combined-Q upgrade** (2026-05-26)
-> **Architecture:** TFK regime + (pullback-to-line OR deep-counter-pullback) entries
->                   + XGBRegressor Q on 43 features + multi-pos with BE-on-new-entry
-> **Holdout PF:** **3.21** @ Q≥4.0 | **WR:** **70.7%** | **+19,877 R** / **n=8,232** / **34 trd/day**
-> **Holdout USD @ 0.01 lot (multi-pos sim):** **+$14,871** / max DD **−$493** / starting $1,000 → final **$15,871**
-> **Bundle:** `hermes_xau_validated.pkl` (43 features) | **NEAR ≤ 0.50** OR **counter ≥ 1.5 ATR** | **Q ≥ 4.0**
-> **Deployed:** v103 base 2026-05-25 (`b50515c`) → **combined-Q 2026-05-26 (`102da4d`)**
+> **Version:** **Path B Q-augmented** (2026-06-17)
+> **Architecture:** TFK regime + (pullback-to-line OR counter-pullback) entries
+>                   + XGBRegressor Q on **62 features** (43 original + 19 Path B) + multi-pos with BE-on-new-entry + **adaptive bucketed trail**
+> **Bundle:** `hermes_xau_validated.pkl` (62 features) | **NEAR ≤ 0.50** OR **counter ≥ 1.5 ATR** | **|dist| ≤ 3.0 ATR (counter cap)** | **Q ≥ 1.5** | time-block 20–01 UTC
+> **Backup of pre-Path-B bundle:** `hermes_xau_validated.pkl.bak_pre_pathb_2026-06-17`
+
+## 🆕 2026-06-18 — Dynamic Q threshold by trend strength (deployed)
+
+When the regime is mature AND price is clearly trending, drop the Q bar to
+catch more trend-following entries. When market is choppy, raise it to be
+pickier. Backward-compat: configs without `q_thr_trend` use static `q_thr`.
+
+**Trend-strong definition** (all 3 conditions): regime_age ≥ 30 bars · |slope20| ≥ 1.0 · |dist_ema50| ≥ 1.0
+
+**Per-product thresholds (Hermes XAU only for now):**
+| Regime | Q threshold |
+|---|---:|
+| trend-strong (~26% of bars) | **0.5** (looser) |
+| chop / weak trend            | **2.0** (stricter, raised from 1.5) |
+
+**8-month holdout (Path B Q model)** vs prior static Q≥1.5:
+
+| Metric | Prior baseline | Dynamic Q | Δ |
+|---|---:|---:|---|
+| PF | 1.42 | 1.42 | tied |
+| WR | 62.2% | 63.0% | +0.8pp |
+| Trades/day | 14.7 | 18.7 | +27% |
+| DD (R) | 145 | **106** | **−27%** |
+| $ @ 0.10 lot | $50,277 | **$62,518** | **+24%** |
+
+**Today's live sim (2026-06-18 partial)**: prior config = 0 trades; dynamic config = 11 trades, +$199 @ 0.10 lot, WR 81.8% — caught the clear XAU uptrend that the strict baseline missed.
+
+Server changes: `decide_hermes.py` computes `trend_strong` flag from the
+last bar's regime_age/slope20/dist_ema50, dispatches Q threshold accordingly.
+Trace fields added: `trend_strong`, `q_thr_active`.
+
+---
+
+## 🆕 2026-06-17 — Path B feature augmentation (deployed)
+
+Q model retrained with **19 new features** added on top of the 43-feature baseline
+(total **62**). Same entry geometry, same labels — only the Q discriminator changed.
+
+**New feature classes** (computed in `decision_engine/hermes_features.py::add_pathb_features`):
+- **Multi-window momentum z-scores** — 4 windows × 2 (raw + z) = 8 features (`ret_5m`, `retz_5m`, `ret_15m`, …)
+- **Vol-of-vol** — `atr_pct_500`, `vol_of_vol_60`, `atr_slope10`
+- **Session VWAP** — `dist_vwap_atr`, `vwap_slope_30`, plus the VWAP itself
+- **Time-of-day** — `hour_sin`, `hour_cos`, `sess_asia`, `sess_london`, `sess_ny`, `sess_overlap`
+
+Cross-asset XAU/BTC features were deliberately omitted (avoids needing BTC fetch at inference).
+
+**Holdout vs pre-Path-B baseline** (same 8-month window, per-candidate R):
+
+| Q≥  | Baseline PF | Path B PF | Path B sumR |
+|-----|-------------|-----------|-------------|
+| 1.5 | 1.33        | **1.33**  | flat (deploy choice)  |
+| 4.0 | 1.34        | **1.77**  | strong dominance |
+| 5.0 | 1.49        | **2.36**  | strong dominance |
+
+Path B Q values run **lower in magnitude** than baseline, so `q_thr=1.5` is calibrated
+to give a similar live trade volume as the old `q_thr=3.0`. Discrimination at higher
+thresholds is significantly better than baseline.
+
+## 🆕 2026-06-17 — Reverted 06-11 tightening
+
+The 2026-06-11 tightening (`near_thr` 0.5→0.3, `counter_thr` 1.5→2.0, `dist_cap` 3.0→2.5,
+`q_thr` 3.0→4.0) cut ~25% of live activity but the live PF lift didn't materialize after
+execution friction. Reverted to wider pullback band + earlier counter entries:
+**`near_thr=0.50`**, **`counter_thr=1.5`**, **`dist_cap=3.0`**. `q_thr` is now 1.5 (Path B scale).
+
+## 🆕 2026-06-16 — Adaptive bucketed trail (deployed)
+
+Replaced static `trail_atr=2.0` with **MFE-bucketed trail multipliers**:
+
+| MFE so far | Trail width |
+|---|---|
+| < 2R   | 1.0 × ATR (lock small winners) |
+| 2–5R   | 2.0 × ATR |
+| ≥ 5R   | 4.0 × ATR (let runners ride) |
+
+Backtest on 8-month unseen Dukascopy holdout:
+- static TRAIL=2.0 (was)  → PF 3.03, DD 243R, $182,589 @ 0.10
+- adaptive (1.0/2.0/4.0)  → PF **4.13** (+36%), DD **178R** (−27%), $165,359 (−9%)
+
+## 🆕 2026-06-04 — Stretched-counter dist cap
+
+After a 9-trade BUY cluster (14:13–14:35) entered at `dist = 4.5–6.5 ATR` from the
+TFK line (way over-stretched counter setups during a strong reversal) and lost
+−54R combined, added `dist_cap=3.0` to block counter entries beyond 3 ATR. Pullback
+entries (`|dist| ≤ near_thr`) are unaffected.
+
+| Variant | PF | WR | $@0.10 (30d post-deploy) |
+|---|---|---|---|
+| baseline (no cap)  | 2.83 | 69.4% | $8,493 |
+| **dist_cap=3.0** ← | **3.76** | **73.3%** | $8,511 |
+| dist_cap=2.5       | 3.85 | 72.2% | $8,015 |
+
+---
+
+## 📚 History (still valid context below)
+
+> **Pre-Path-B headline (2026-05-26, combined-Q):** PF **3.21** @ Q≥4.0 | WR **70.7%** | +19,877 R / n=8,232 / 34 trd/day
+> **Deployed:** v103 base 2026-05-25 (`b50515c`) → combined-Q 2026-05-26 (`102da4d`) → Path B 2026-06-17
 
 
 ## 🧠 2026-06-09 — Time-of-day filter (deployed)

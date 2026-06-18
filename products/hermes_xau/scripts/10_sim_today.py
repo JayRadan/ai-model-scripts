@@ -79,7 +79,11 @@ SWITCH_DELTA = 0.5
 COOLDOWN     = 5
 NEAR_THR     = 0.50
 COUNTER_THR  = 1.5
-Q_THR        = 4.0
+Q_THR        = 2.0   # 2026-06-18 dynamic Q: strict default for chop
+Q_THR_TREND  = 0.5   # 2026-06-18 dynamic Q: looser when trend_strong
+TREND_AGE_MIN     = 30
+TREND_SLOPE_MIN   = 1.0
+TREND_DEMA50_MIN  = 1.0
 DIST_CAP     = 3.0       # 2026-06-04 stretched-counter veto
 TIME_BLOCK   = (20, 1)   # 2026-06-09 — block entries at UTC hours [20, 1)
                          # +3.5% $ vs no time-block; (0, 0) = disabled
@@ -119,10 +123,13 @@ def bars_in_regime_array(cdir):
     return out
 
 
-def add_features_LOOKAHEAD(df):
-    """Recreate the deployed feature pipeline. Uses resample()+reindex(ffill)
-    for HTF columns — this is the SAME look-ahead pattern as the deployed
-    server. Bug-compatible with production behaviour."""
+_HTF_EMA_A = 2.0 / 51.0
+
+def add_features_CAUSAL(df):
+    """Causal HTF — matches deployed _causal_htf_partial (server-side).
+    Each M1 bar sees only HTF bars that have COMPLETED. Replaces the prior
+    add_features_LOOKAHEAD which used resample+ffill (peeks at the rest of
+    the in-progress HTF bucket → inflated PF 2-5x; fixed server-side 2026-05-28)."""
     df = df.copy()
     if not pd.api.types.is_datetime64_any_dtype(df["time"]):
         df["time"] = pd.to_datetime(df["time"])
@@ -140,20 +147,37 @@ def add_features_LOOKAHEAD(df):
     for nm in (5, 10, 20):
         df[f"slope{nm}"] = (c - c.shift(nm)) / df["atr14"]
     df["atr_ratio"] = df["atr14"] / df["atr14"].rolling(50, min_periods=50).mean()
-    df_ts = df.set_index("time")
-    for tf_name, tf in [("m5", "5min"), ("m15", "15min"), ("h1", "60min")]:
-        g = df_ts[["high", "low", "close"]].resample(tf).agg(
-            {"high": "max", "low": "min", "close": "last"}).dropna()
-        ch = g["close"]; delta = ch.diff()
-        up = delta.clip(lower=0).rolling(14, min_periods=14).mean()
-        dn = (-delta.clip(upper=0)).rolling(14, min_periods=14).mean()
-        rs = up / dn.replace(0, np.nan)
-        g[f"{tf_name}_rsi14"] = 100 - 100 / (1 + rs)
-        g[f"{tf_name}_slope5"] = (ch - ch.shift(5))
-        g[f"{tf_name}_ema50_dist"] = ch - ch.ewm(span=50, adjust=False).mean()
-        keep = [c_ for c_ in g.columns if c_ not in ("high", "low", "close")]
-        out = g[keep].reindex(df_ts.index, method="ffill")
-        for col in out.columns: df[col] = out[col].to_numpy()
+    # CAUSAL HTF (ported from server's _causal_htf_partial)
+    s = df.set_index("time")["close"]
+    for tf_name, tf_min in [("m5", 5), ("m15", 15), ("h1", 60)]:
+        g = s.resample(f"{tf_min}min").last().dropna()
+        hc = g.to_numpy(np.float64)
+        end_times = (g.index + pd.Timedelta(minutes=tf_min)).values
+        n = len(df)
+        rsi = np.full(n, np.nan); slope = np.full(n, np.nan); emad = np.full(n, np.nan)
+        if len(hc) >= 16:
+            ema = np.empty(len(hc)); e = hc[0]
+            for i in range(len(hc)):
+                e = hc[0] if i == 0 else e * (1 - _HTF_EMA_A) + hc[i] * _HTF_EMA_A
+                ema[i] = e
+            d = np.diff(hc, prepend=hc[0])
+            cumg = np.cumsum(np.clip(d, 0, None))
+            cuml = np.cumsum(np.clip(-d, 0, None))
+            m1t = df["time"].values
+            cc_all = df["close"].to_numpy(np.float64)
+            j = np.searchsorted(end_times, m1t, side="right") - 1
+            ok = j >= 14
+            jj = j[ok]; cc = cc_all[ok]
+            slope[ok] = cc - hc[jj - 4]
+            emad[ok] = cc - (ema[jj] * (1 - _HTF_EMA_A) + cc * _HTF_EMA_A)
+            dc = cc - hc[jj]
+            gsum = (cumg[jj] - cumg[jj - 13]) + np.clip(dc, 0, None)
+            lsum = (cuml[jj] - cuml[jj - 13]) + np.clip(-dc, 0, None)
+            rs = (gsum / 14.0) / np.where(lsum == 0, np.nan, lsum / 14.0)
+            rsi[ok] = 100 - 100 / (1 + rs)
+        df[f"{tf_name}_rsi14"] = rsi
+        df[f"{tf_name}_slope5"] = slope
+        df[f"{tf_name}_ema50_dist"] = emad
     return df
 
 
@@ -173,7 +197,7 @@ print(f"  fetched {len(df):,} bars  last bar: {df.time.iloc[-1]}")
 
 # ── 2. Features (TFK + standard) ───────────────────────────────────────
 tfk_df = compute_tfk(df)
-fdf = add_features_LOOKAHEAD(df)
+fdf = add_features_CAUSAL(df)
 for c in ["force", "velocity", "x_est", "regime_w", "trend_raw", "trend",
           "committed_dir", "confirmed_dir", "tfk_line"]:
     fdf[c] = tfk_df[c].to_numpy()
@@ -196,6 +220,41 @@ FLOW = ["imbalance_ratio", "bid_ask_vol_ratio", "vpin_proxy", "median_spread",
         "signed_flow", "n_ticks"]
 for f in FLOW:
     if f not in fdf.columns: fdf[f] = 0.0
+
+# Path B features (deployed 2026-06-17 — required by 62-feature Q bundle)
+_C = fdf["close"].to_numpy(np.float64)
+_H = fdf["high"].to_numpy(np.float64); _L = fdf["low"].to_numpy(np.float64)
+_atr14 = fdf["atr14"].to_numpy(np.float64)
+for _w, _lab in [(5,"5m"),(15,"15m"),(60,"60m"),(240,"240m")]:
+    _r = pd.Series(_C).pct_change(_w) * 100
+    _roll = _r.rolling(500, min_periods=100)
+    _z = (_r - _roll.mean()) / _roll.std().replace(0, np.nan)
+    fdf[f"ret_{_lab}"]  = _r.fillna(0).to_numpy()
+    fdf[f"retz_{_lab}"] = _z.fillna(0).to_numpy()
+_atr_s = pd.Series(_atr14)
+fdf["atr_slope10"]   = (_atr_s - _atr_s.shift(10)).fillna(0).to_numpy() / np.maximum(_atr14, 1e-6)
+fdf["atr_pct_500"]   = _atr_s.rolling(500, min_periods=100).rank(pct=True).fillna(0.5).to_numpy()
+fdf["vol_of_vol_60"] = _atr_s.rolling(60, min_periods=20).std().fillna(0).to_numpy() / np.maximum(_atr14, 1e-6)
+_t = pd.to_datetime(fdf["time"])
+_sid = _t.dt.normalize().astype("int64").to_numpy()
+_tp = (_H + _L + _C) / 3.0
+_v = fdf.get("tick_volume", pd.Series(1.0, index=fdf.index)).to_numpy(np.float64)
+_v = np.maximum(_v, 1.0)
+_vwap = np.zeros(len(fdf)); _last = -1; _cpv = 0.0; _cv = 0.0
+for _i in range(len(fdf)):
+    if _sid[_i] != _last: _cpv = 0.0; _cv = 0.0; _last = _sid[_i]
+    _cpv += _tp[_i]*_v[_i]; _cv += _v[_i]; _vwap[_i] = _cpv / max(_cv, 1.0)
+fdf["sess_vwap"] = _vwap
+fdf["dist_vwap_atr"] = (_C - _vwap) / np.maximum(_atr14, 1e-6)
+_vwap_s = pd.Series(_vwap)
+fdf["vwap_slope_30"] = (_vwap_s - _vwap_s.shift(30)).fillna(0).to_numpy() / np.maximum(_atr14, 1e-6)
+_hrs = _t.dt.hour.to_numpy()
+fdf["hour_sin"] = np.sin(2*np.pi*_hrs/24)
+fdf["hour_cos"] = np.cos(2*np.pi*_hrs/24)
+fdf["sess_asia"]    = ((_hrs >= 0)  & (_hrs < 7)).astype(np.float32)
+fdf["sess_london"]  = ((_hrs >= 7)  & (_hrs < 13)).astype(np.float32)
+fdf["sess_overlap"] = ((_hrs >= 13) & (_hrs < 17)).astype(np.float32)
+fdf["sess_ny"]      = ((_hrs >= 13) & (_hrs < 21)).astype(np.float32)
 
 # ── 3. Candidate selection (pullback OR counter) ───────────────────────
 counter_score = dist_signed * cdir
@@ -237,15 +296,23 @@ bundle = pickle.load(open(BUNDLE_PATH, "rb"))
 M = bundle["q_model"]; feat_cols = bundle["feat_cols"]
 Xall = fdf[feat_cols].fillna(0).to_numpy(np.float32)
 q_live = M.predict(Xall[idxs])
+# Dynamic Q threshold per candidate based on trend_strong flag
+ra = fdf["regime_age"].to_numpy(float)[idxs]
+sl20 = fdf["slope20"].to_numpy(float)[idxs]
+de50 = fdf["dist_ema50"].to_numpy(float)[idxs]
+trend_strong = (ra >= TREND_AGE_MIN) & (np.abs(sl20) >= TREND_SLOPE_MIN) & (np.abs(de50) >= TREND_DEMA50_MIN)
+q_thr_per_cand = np.where(trend_strong, Q_THR_TREND, Q_THR)
+pass_q = q_live >= q_thr_per_cand
 print(f"  Q dist: median={np.median(q_live):.2f}  p75={np.quantile(q_live, 0.75):.2f}  max={q_live.max():.2f}")
-print(f"  candidates with Q >= {Q_THR}: {int((q_live >= Q_THR).sum())}")
+print(f"  trend_strong candidates: {int(trend_strong.sum())} ({100*trend_strong.mean():.0f}%)")
+print(f"  candidates passing dynamic Q (≥{Q_THR}/chop or ≥{Q_THR_TREND}/trend): {int(pass_q.sum())}")
 
 times = df["time"].to_numpy()
 
 # ── 5. Multi-position simulation with BE@+0.5R, switch-rule, cooldown ──
 active = []; executed = []; last_open = {-1: -10**9, 1: -10**9}
 info = {int(idxs[k]): (int(dirs[k]), float(q_live[k]))
-        for k in range(len(idxs)) if q_live[k] >= Q_THR}
+        for k in range(len(idxs)) if pass_q[k]}
 if not info:
     print("  no candidates survived q_thr filter")
     sys.exit(0)

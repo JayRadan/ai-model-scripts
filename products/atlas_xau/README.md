@@ -1,6 +1,8 @@
-# Atlas XAU — M15 Macro Kalman + M1 U-shape Reversal
+# Atlas XAU — STRICT 2-bar candle reversal (Kalman + Hermes TFK) — ⚠️ EDGE DEAD
 
-> **Version:** **ushape_m15** (deployed 2026-06-17) — replaces prior STRICT-candle architecture
+> **⚠️ STATUS 2026-06-26:** deployed = **strict-candle first-deploy** (restored 2026-06-25, commit `d187ecc` "revert all 6 products to first-deploy"). The ushape_m15 documented below was **reverted**. An **8-year deep retrain confirmed the XAU strict-candle edge is DEAD** — cross-regime holdout PF **0.95** (losing), 6th disconfirmation. **NOT redeployed; recommend DISABLE live.** Contrast Atlas BTC, whose edge *survived* the same 8-year test (deployed `cd911ca`). Repro: `experiments/atlas_retrain_like_dow/` (`train.py`).
+>
+> **Version (HISTORICAL, REVERTED 2026-06-25):** **ushape_m15** (deployed 2026-06-17) — replaced prior STRICT-candle architecture
 > **Architecture:** M15 Kalman macro regime + M1 Kalman U-shape edge-detected reversal
 > **Bundle:** `atlas_xau_validated.pkl` (40-feature Q-regressor, M15 + M1 Kalman state)
 > **Entry rule:** BUY iff M15 kf_dir=+1 AND M1 kf_dir=−1 AND M1 kf_v<0 AND M1 f_accel>0 AND edge-bar; SELL mirror.

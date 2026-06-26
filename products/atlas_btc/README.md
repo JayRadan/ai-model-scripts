@@ -1,14 +1,70 @@
-# Atlas BTC — M15 Macro Kalman + M1 U-shape Reversal (Bitcoin)
+# Atlas BTC — STRICT 2-bar candle reversal (Kalman + Hermes TFK), 8-YEAR deep retrain (Bitcoin)
 
-> **Version:** **ushape_m15** (deployed 2026-06-17) — replaces prior STRICT-candle architecture
-> **Architecture:** M15 Kalman macro regime + M1 Kalman U-shape edge-detected reversal (mirror of Atlas XAU deploy)
-> **Bundle:** `atlas_btc_validated.pkl` (40-feature Q with M15 + M1 Kalman state)
-> **Entry rule:** BUY iff M15 kf_dir=+1 AND M1 kf_dir=−1 AND M1 kf_v<0 AND M1 f_accel>0 AND edge-bar; SELL mirror.
-> **Q threshold:** Q ≥ **1.5** (q_model_holdout used at inference for calibration consistency)
-> **Exit:** SL 6×ATR · TRAIL 1.0×ATR · MAX_HOLD 300 · BE@+0.5R · 4 slots
-> **Rollback:** `cp atlas_btc_validated.pkl.bak_pre_m15_ushape_2026-06-17 atlas_btc_validated.pkl` + revert config flag.
+> **Version:** **strict-candle 8y-deep** (`atlas_btc_8y_2026-06-26`) — **DEPLOYED, commit `cd911ca`**
+> **Architecture:** identical engine to Atlas DOW/XAU — M1 Kalman regime + M1 Hermes TFK, **STRICT 2-bar candle-reversal** confirmation gated by both-lines + `kf_age≥3`; XGBRegressor Q trained only on MFE≥2R candidates. **54 features** (Kalman state + TFK + 18 standard + 14 order-flow).
+> **Bundle:** `atlas_btc_validated.pkl` (8-year retrain, `q_thr=3.0`, SL 6×ATR / TRAIL 2×ATR / MAXH 300, BE @ +0.5R, `max_concurrent=1`, spread 0.30 R-units)
+> **Trained on:** 8 years M1 BTC tick→orderflow **2018 → 2026** (4.08M bars; ticks backfilled to 2018 to match DOW's depth)
+> **Holdout (unseen, post-2025-09):** PF **1.32** @ Q≥3 (WR 71.4%, +1,882R) · PF 1.43 @ Q≥4
+> **Walk-forward:** **18/18 quarterly windows PF>1.0** (2022→2026, median 1.38, WR 68–73%, incl. 2022 crypto crash) — more robust than DOW's 10/10
+> **Backup:** `atlas_btc_validated.pkl.bak_pre_8y_2026-06-26` · **Rollback:** `git revert cd911ca` (commercial repo)
+> **⚠️ Live caveat:** offline edge is strong but live BTC *was* losing pre-retrain — likely an execution gap (real spread/slippage > 0.30-ATR modeled). Deep retrain fixes *overfitting*, not necessarily *execution*. Monitor live.
 
-## 🆕 2026-06-17 — Full architecture replacement: ushape_m15
+## 🆕 2026-06-26 — 8-YEAR deep retrain (DEPLOYED, commit `cd911ca`)
+
+**Why:** live BTC was losing while Atlas DOW (identical recipe) was profitable. Root cause:
+the deployed BTC bundle was trained on only ~9 months (2024-12 → 2025-09) — a thin recent
+window — while DOW had 8 years. Backfilled XAU+BTC Dukascopy ticks to 2018, rebuilt the full
+8-year orderflow parquet, and retrained with the **exact Atlas DOW recipe**.
+
+**Result:** the BTC edge **survives deep cross-regime training** — holdout PF 1.32 @ Q≥3,
+and **walk-forward 18/18 quarterly windows PF>1.0** (2022→2026, incl. the 2022 crash). By
+contrast **Atlas XAU's edge VANISHES on 8-year data (PF 0.95) — confirmed dead, NOT redeployed.**
+
+**Entry (STRICT):** BUY = TFK GREEN + Kalman RED + prior bar strong-bear (body ≥ 0.8×ATR)
+closing below BOTH lines + current bar green + kf_age ≥ 3. SELL = mirror.
+**Exit:** hard SL 6×ATR, trail 2×ATR, max-hold 300 M1 bars, BE @ +0.5R on new signal. `q_thr=3.0`.
+
+**Reproduce** (`experiments/atlas_retrain_like_dow/`): `backfill_ticks.py` (ticks→2018) →
+`aggregate_8y.py` (→ `data/m1_btc_orderflow_8y.parquet`) → `build_btc_bundle.py` (writes the
+deployed bundle) · WF: `wf_btc.py`. Recipe mirrors `products/atlas_dji/scripts/03_train_q_production.py`.
+
+---
+
+## ⛔ SUPERSEDED 2026-06-23 — Band-pullback v1 (deployed e442bf2, **REVERTED 2026-06-25** d187ecc)
+
+> The band-pullback engine below was deployed 2026-06-23 but **reverted on 2026-06-25**
+> ("restore all 6 products to first-deploy") back to the strict-candle architecture, which
+> was then deep-retrained above. **It is NOT live** — the WF 2.38 / PF 4.89 figures here
+> are not the deployed model. Kept for history only.
+
+The ushape_m15 product (everything documented below this section) was **fully
+replaced** by the Kalman-band-pullback engine — same architecture as Hermes XAU.
+Entry is a **rejection of the M1 Kalman ±2σ envelope, confirmed by a candle color
+flip, gated to with-trend by M30 TFK (PRO)**.
+
+**Entry rules** (deployed bundle `rules`):
+| Side | Rule |
+|---|---|
+| SHORT | M30 TFK = −1 **AND** bar i−1: High ≥ `kf_upper(k=2.0)` **AND** green **AND** bar i: red → SHORT at open(i+1) |
+| LONG  | M30 TFK = +1 **AND** bar i−1: Low ≤ `kf_lower(k=2.0)` **AND** red **AND** bar i: green → LONG at open(i+1) |
+
+**Exit:** band-exit (opposite envelope touch + color flip), hard SL **3.0R**, max-hold **200 M1 bars** (~3h).
+
+**Cascade (3 XGB heads, keep iff all pass):** `MFE ≥ mfe_t`, `Q ≥ q_t`, `BL ≤ bl_t`.
+Deployed BTC thresholds (both slots): **`mfe_t=0.40, q_t=−5.0 (off), bl_t=1.0 (off)`** — BTC keeps on the MFE head alone (highest trade volume of the three band products: ~28 trades/day in live sim).
+
+**34 features** — same `feat_cols` as Hermes XAU (Kalman state + candle geometry + TFK natives + classic context). **No order-flow.**
+
+**Trained on** Dukascopy M1 BTC 2024-10-31 → 2026-05-02 (BTC has ~18mo of usable Dukascopy data). Research in `experiments/hermes_band_pullback/` (`train_production_btc_dji.py`, `sweep_btc_dji.py`, `wf_btc_dji.py`).
+
+**Today's live sim (2026-06-24):** 28 trades · WR 82.1% · **PF 4.89** · +22.09R · DD 3.0R · $+33.13.
+
+---
+
+<details>
+<summary>📦 ARCHIVED — pre-2026-06-23 ushape_m15 / strict-candle architecture (no longer deployed)</summary>
+
+## 2026-06-17 — Full architecture replacement: ushape_m15
 
 Replaces the prior STRICT-2-bar reversal candle with M15-macro + M1 U-shape edge
 (same change as Atlas XAU deploy, commit 7bf5a37).
@@ -131,3 +187,5 @@ Identical to Atlas XAU — see `products/atlas_xau/README.md` for details.
 | Script | Purpose |
 |---|---|
 | `scripts/10_sim_today.py` | Pull fresh Dukascopy bars, simulate today's trades with deployed config |
+
+</details>

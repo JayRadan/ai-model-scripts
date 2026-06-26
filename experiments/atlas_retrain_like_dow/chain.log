@@ -1,0 +1,4 @@
+=== aggregation finished, starting 8y retrain ===
+-rw-rw-r-- 1 jay jay 536735829 Jun 26 19:53 data/m1_btc_orderflow_8y.parquet
+-rw-rw-r-- 1 jay jay 437845918 Jun 26 19:50 data/m1_xau_orderflow_8y.parquet
+=== CHAIN DONE ===

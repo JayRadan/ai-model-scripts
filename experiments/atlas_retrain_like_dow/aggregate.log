@@ -1,0 +1,23 @@
+waiting for backfill to finish ...
+backfill done — aggregating
+[xau] aggregating 2166 tick days ...
+  [xau] 300/2166 (15s)
+  [xau] 600/2166 (35s)
+  [xau] 900/2166 (61s)
+  [xau] 1200/2166 (81s)
+  [xau] 1500/2166 (98s)
+  [xau] 1800/2166 (115s)
+  [xau] 2100/2166 (139s)
+[xau] DONE → m1_xau_orderflow_8y.parquet  2,916,410 bars  2018-01-01 23:00:00 -> 2026-05-01 20:59:00  (152s)
+[btc] aggregating 2987 tick days ...
+  [btc] 300/2987 (7s)
+  [btc] 600/2987 (16s)
+  [btc] 900/2987 (26s)
+  [btc] 1200/2987 (48s)
+  [btc] 1500/2987 (70s)
+  [btc] 1800/2987 (90s)
+  [btc] 2100/2987 (104s)
+  [btc] 2400/2987 (119s)
+  [btc] 2700/2987 (130s)
+[btc] DONE → m1_btc_orderflow_8y.parquet  4,082,748 bars  2018-01-01 22:01:00 -> 2026-05-02 21:59:00  (152s)
+ALL AGGREGATION DONE

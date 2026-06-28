@@ -1,11 +1,37 @@
 # Oracle BTC — RL-Enhanced BTCUSD Model
 
-> **Version:** **v99b q_entry** (dynamic-exit relabel) + v88 reverse-setup exit + v97 wider hard SL (6 ATR)
-> **Holdout PF:** **5.60** @ Q≥2.0 (backtest with v88+trail+6×ATR exits) | **WR:** **88.1%** | **+482R / N=168**
-> **Bundle:** `oracle_btc_validated.pkl` | **min_q:** 3.0 (raised from 0.3 — v99b Q-distribution runs higher)
-> **Deployed:** v84 2026-05-06 → v88 2026-05-08 → v89 2026-05-10 → v90 2026-05-12 → v97 2026-05-13 → **v99b 2026-05-17 (commit `e2e9681`)**
+> **Version:** **smart pipeline PRO** (`smart_pipeline_version=v103-btc-2026-06-23`, `smart_routing_mode=PRO`, base `v99b_dynamic_exit_relabel_minq3`)
+> **Routing:** **PRO (with-trend)** — fire only when the M15/M30 TFK direction **matches** the trade direction. Replaced the ANTI gate on 2026-06-23.
+> **Walk-forward (PRO):** combined **PF 2.05** (see [Oracle PRO routing deploy](../../))
+> **Bundle:** `oracle_btc_validated.pkl` | **min_q:** 3.0 | smart-exit = future-upside XGBRegressor (max_hold 60, hard SL 6R EA / 5R smart, trail off) **+ BE-lock @5R→+2R** | **big-loss veto** `thr=0.40` (`big_loss ≤ −2.0R`, trained from 2025-01-01)
+> **🆕 BE-lock (2026-06-25, commit `3f022fb`):** once a trade peaks ≥ 5R its floor locks at +2R (server-side, no EA change). XAU-validated @5R→+2R; same applied to BTC. Config `be_lock_r=5.0`, `be_floor_r=2.0`.
+> **⚠️ Live (5 wks): −$302.** Soft. Candidate for the 8-year deep-retrain test.
+> **Deployed:** … → v99b 2026-05-17 → smart-exit + veto 2026-06-22 → PRO routing 2026-06-23 (`af76882`) → **BE-lock 2026-06-25 (`3f022fb`)**
+> **Rollback:** in the commercial repo `git revert af76882`, then restore `oracle_btc_validated.pkl.bak_pre_PRO_2026-06-23`, push.
 
-## ⚠️ v99b live notes (deployed 2026-05-17)
+## 🆕 2026-06-23 — ANTI → PRO routing + big-loss veto (DEPLOYED, commit af76882)
+
+Mirror of the Oracle XAU PRO deploy. The 2-regime smart pipeline now trades
+**with-trend (PRO)**: fire a setup only when the M15/M30 TFK direction **matches**
+the trade direction (Up-regime → longs, Down-regime → shorts).
+
+- `smart_routing_mode="PRO"` — server `decide.py` reads the flag and applies the with-trend gate.
+- **Big-loss veto** (`smart_veto_mdl`, XGBClassifier): blocks entries with `P(big_loss ≤ −2.0R) > 0.40`. Trained on recent 2025+ data (`smart_veto_version=v2-bigloss-2026-06-23`).
+- Retained from 2026-06-22: `smart_exit_mdl` (future-upside regressor, max_hold 60, hard SL 5R, trail off, M-TFK gated), `meta_mdl`, `giveback_mdl`, plus the shared live-ops stack-gate / regime-override / forecast-unblock features below.
+- BTC pipeline build script: `experiments/oracle_m15_tfk_gate/deploy_btc_full_PRO.py` (SPREAD=$5.0, MIN_HOLD=3, MAX_HOLD=60, SL_HARD=5.0, TFK_TF=30min).
+
+**Why PRO:** same finding as XAU — the counter-trend (ANTI) gate fired against
+M30 trends; with-trend routing walk-forwards to **PF 2.05** on BTC (higher than
+XAU's 1.73, consistent with BTC's larger ATR runs).
+
+**Today's live sim (2026-06-24, server-exact):** see scripts/10_sim_today.py run output / the SUMMARY below.
+
+---
+
+<details>
+<summary>📦 HISTORY — pre-2026-06-23 notes. NOTE: routing (ANTI→PRO), exit (→smart-exit) and q_entry (→2-regime smart) are SUPERSEDED above; the Live Operations Tooling (stack-gate / regime-override / forecast-unblock) below is STILL ACTIVE.</summary>
+
+## v99b live notes (deployed 2026-05-17)
 
 Only `q_entry` (5 XGBRegressors) was swapped. All other components retained from v97:
 confirm heads (`mdls`), `meta_mdl`, `exit_mdl`, `giveback_mdl`, exit_feats, meta_feats.
@@ -116,12 +142,12 @@ Backtest uses production-matching exit stack: v88 reverse-setup + trail (after +
 - **min_q**: bumped 0.3 → 3.0 because v99b Q-values run higher (BTC C0 zeros Q≈10 vs v97 ~2-5)
 
 ### Files
-- `experiments/v99_rl_relabel/01_label.py` — labeler (smoke test on 30 days)
-- `experiments/v99_rl_relabel/03_label_full.py` — full XAU + BTC labeling
-- `experiments/v99_rl_relabel/06_add_features_retrain.py` — final 23-feat retrain
-- `experiments/v99_rl_relabel/08_backtest_with_v88_exit.py` — backtest with prod-matching exits
-- `experiments/v99_rl_relabel/09_build_deploy_bundle.py` — packages v99b q_entry into prod-pkl format
-- `experiments/v99_rl_relabel/q_models_btc_v99b_23feat.pkl` — source (q_entry only)
+- `products/_shared/oracle_build/v99_rl_relabel/01_label.py` — labeler (smoke test on 30 days)
+- `products/_shared/oracle_build/v99_rl_relabel/03_label_full.py` — full XAU + BTC labeling
+- `products/_shared/oracle_build/v99_rl_relabel/06_add_features_retrain.py` — final 23-feat retrain
+- `products/_shared/oracle_build/v99_rl_relabel/08_backtest_with_v88_exit.py` — backtest with prod-matching exits
+- `products/_shared/oracle_build/v99_rl_relabel/09_build_deploy_bundle.py` — packages v99b q_entry into prod-pkl format
+- `products/_shared/oracle_build/v99_rl_relabel/q_models_btc_v99b_23feat.pkl` — source (q_entry only)
 - `commercial/server/decision_engine/models/oracle_btc_validated.pkl` — deployed full bundle
 - `commercial/server/decision_engine/models/oracle_btc_validated.pkl.bak_pre_v99b` — rollback backup
 
@@ -191,7 +217,7 @@ source .venv/bin/activate
 python3 products/oracle_btc/train_rl_entry.py
 ```
 
-Script: `train_rl_entry.py` (originally `experiments/v84_rl_entry/07_btc_rl.py`)
+Script: `train_rl_entry.py` (originally `this folder (train_rl_entry.py)`)
 
 Same pipeline as Oracle XAU — loads BTC data, trains 5 Q-models, confirm,
 exit, meta, and saves bundle. Also runs holdout comparison against v83c
@@ -282,9 +308,9 @@ Validated on the unseen 30% of v84 RL trades (BTC 341 trades,
 BTC saw the biggest PF lift (+0.99) of any product because a larger
 fraction of its trades are in regimes where opposite-direction setups
 fire frequently. Source:
-`experiments/v88_exit_rl/13_reverse_setup_exit.py`. Full disprove
+`products/_shared/oracle_build/v88_exit_rl/13_reverse_setup_exit.py`. Full disprove
 catalog of 12 other approaches in
-`experiments/v88_exit_rl/README.md`.
+`products/_shared/oracle_build/v88_exit_rl/README.md`.
 
 ### EA Endpoint
 `POST /decide/oracle_btc` — returns RL decisions with `rule="RL"`.
@@ -305,11 +331,13 @@ Root shortcut: `train_rl_entry.py` (same as script 04)
 
 ### v88 Exit Improvement Experiments
 Runtime-only changes (no model retrain). See
-`experiments/v88_exit_rl/README.md` for the full 13-experiment catalog.
+`products/_shared/oracle_build/v88_exit_rl/README.md` for the full 13-experiment catalog.
 
 | Script | Outcome |
 |---|---|
-| `experiments/v88_exit_rl/13_reverse_setup_exit.py` | ✅ DEPLOYED — PF 4.27 → 5.26, MaxDD -5R |
-| `experiments/v88_exit_rl/11_regime_conditional_be.py` | ⚠️ small win on BTC (+8R, PF 4.27→4.44) — NOT deployed (user opted for v13 only) |
-| `experiments/v88_exit_rl/01..10,12_*.py` | ❌ All disproven on unseen — see README |
+| `products/_shared/oracle_build/v88_exit_rl/13_reverse_setup_exit.py` | ✅ DEPLOYED — PF 4.27 → 5.26, MaxDD -5R |
+| `products/_shared/oracle_build/v88_exit_rl/11_regime_conditional_be.py` | ⚠️ small win on BTC (+8R, PF 4.27→4.44) — NOT deployed (user opted for v13 only) |
+| `products/_shared/oracle_build/v88_exit_rl/01..10,12_*.py` | ❌ All disproven on unseen — see README |
 | `experiments/v87_multi_head_exit/` | ❌ -674R on unseen, REMOVED 2026-05-08 |
+
+</details>

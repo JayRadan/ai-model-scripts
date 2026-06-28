@@ -1,12 +1,64 @@
-# Hermes XAU — M1 TFK + Order-Flow Q-Regressor
+# Hermes XAU — M1 TFK-driven + order-flow Q (combined pullback / counter)
 
-> **Version:** **Path B Q-augmented** (2026-06-17)
-> **Architecture:** TFK regime + (pullback-to-line OR counter-pullback) entries
->                   + XGBRegressor Q on **62 features** (43 original + 19 Path B) + multi-pos with BE-on-new-entry + **adaptive bucketed trail**
-> **Bundle:** `hermes_xau_validated.pkl` (62 features) | **NEAR ≤ 0.50** OR **counter ≥ 1.5 ATR** | **|dist| ≤ 3.0 ATR (counter cap)** | **Q ≥ 1.5** | time-block 20–01 UTC
-> **Backup of pre-Path-B bundle:** `hermes_xau_validated.pkl.bak_pre_pathb_2026-06-17`
+> **⚠️ STATUS 2026-06-25:** deployed = **TFK combined-Q order-flow architecture** (restored by commit `d187ecc` "revert all 6 products to first-deploy"). The band-pullback v1 below (ed295bb, 2026-06-23) was **REVERTED** and is **NOT live**.
+> **Deployed config:** TFK-driven M1 + order-flow; entry gate `near_thr=0.50` (pullback) ∪ counter setup; `q_thr=1.0`; SL 4×ATR, trail 3×ATR, BE-on-new-entry, `max_concurrent=1`. Bundle `hermes_xau_validated.pkl` (first-deploy).
+> **⚠️ Live (5 wks, May–Jun): −$866.** Honest edge weak — backtests were HTF look-ahead-inflated (~PF 1.2). Candidate for the 8-year deep-retrain test (like Atlas BTC) or disable.
+>
+> **Version (HISTORICAL, REVERTED 2026-06-25):** band-pullback v1 (`hermes_band_pullback_v1_2026-06-23`, ed295bb) — the WF 1.88 / +1,931R figures below are **NOT** the deployed model.
 
-## 🆕 2026-06-18 — Dynamic Q threshold by trend strength (deployed)
+## ⛔ SUPERSEDED 2026-06-23 — Band-pullback replacement (deployed ed295bb, **REVERTED 2026-06-25** d187ecc)
+
+The Path-B order-flow Q product (everything documented below this section) was
+**fully replaced** by a Kalman-band-pullback engine — the same architecture that
+now also drives Atlas BTC and Atlas DJI. Entry geometry is no longer TFK
+pullback-to-line; it is a **rejection of the Kalman ±2σ envelope, confirmed by a
+candle color flip, gated to with-trend by M30 TFK (PRO)**.
+
+**Entry rules** (per the deployed bundle's `rules`):
+| Side | Rule |
+|---|---|
+| SHORT | M30 TFK = −1 **AND** bar i−1: High ≥ `kf_upper(k=2)` **AND** green **AND** bar i: red → enter SHORT at open(i+1) |
+| LONG  | M30 TFK = +1 **AND** bar i−1: Low ≤ `kf_lower(k=2)` **AND** red **AND** bar i: green → enter LONG at open(i+1) |
+
+**Exit rules:**
+- SHORT: bar j Low ≤ `kf_lower` AND red AND bar j+1 green → cover at open(j+1) (band-exit)
+- LONG: bar j High ≥ `kf_upper` AND green AND bar j+1 red → sell at open(j+1) (band-exit)
+- Hard SL: **3R** adverse from entry
+- Max hold: **200 M1 bars** (~3.3h)
+
+**Cascade scoring** (3 XGB heads per slot, keep iff all pass):
+- `MFE` (P(reach ≥ target favorable)) ≥ `mfe_t`
+- `Q` (predicted R regressor) ≥ `q_t`
+- `BL` (P(big loss)) ≤ `bl_t`
+
+Deployed per-slot thresholds: **SHORT** `mfe_t=0.70, q_t=0.80, bl_t=0.40`;
+**LONG** `mfe_t=0.70, q_t=−5.0 (off), bl_t=1.0 (off)` — the long slot relies on
+the MFE head alone (longs were the weaker leg in WF: PF 1.71 vs 2.47 short).
+
+**34 features** (`feat_cols`): Kalman state (`kf_dir`, `kf_regime_age`,
+`dist_upper/lower/kf`, `band_width_atr`), candle geometry (`body_atr`,
+`bar_range_atr`), TFK natives (`committed_dir`, `dist_tfk`, `f_*`, `force`,
+`velocity`, `x_est`, `regime_w`, `trend_raw/trend`), and classic context
+(`rsi14`, `dist_ema20/50/100/200`, `slope5/10/20`, `atr_ratio`, `hour`, `dow`).
+**No order-flow / tick features** — band-pullback is OHLCV-only.
+
+**Trained on** full Dukascopy M1 2018-01-01 → 2026-05-01. Research lineage lives
+in `experiments/hermes_band_pullback/` (`train_production_and_sim_today.py`,
+`train_and_walkforward.py`, `sweep_btc_dji.py`).
+
+**Why it replaced Path-B:** the [Hermes HTF look-ahead](../../) audit showed the
+old Hermes backtests were inflated 2–5× by HTF look-ahead; the honest Path-B edge
+was weak (~PF 1.2). The band-pullback engine is fully causal (M30 TFK is
+forward-filled from completed M30 bars only) and walk-forward-validated 9/9 folds.
+
+**Today's live sim (2026-06-24):** 4 trades · WR 75.0% · **PF 4.91** · +12.30R · DD 3.2R · $+18.45 — see `experiments/hermes_band_pullback/sim_today_all3.py`.
+
+---
+
+<details>
+<summary>📦 ARCHIVED — pre-2026-06-23 Path-B / order-flow Q architecture (no longer deployed)</summary>
+
+## 2026-06-18 — Dynamic Q threshold by trend strength (deployed)
 
 When the regime is mature AND price is clearly trending, drop the Q bar to
 catch more trend-following entries. When market is choppy, raise it to be
@@ -442,3 +494,5 @@ git log --oneline | head -10                  # find the pre-Hermes commit
 git revert <hermes-commits> --no-edit
 git push                                       # Render redeploys Oracle-only in ~90s
 ```
+
+</details>

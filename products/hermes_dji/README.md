@@ -1,8 +1,24 @@
 # Hermes DJI — M1 Dow Jones (US30)
 
+> **⚠️ STATUS 2026-06-25:** restored to **first-deploy** by commit `d187ecc` ("revert all 6 products to first-deploy"). **Deployed `q_thr=3.0`** — the 2026-06-17 lowering to 2.5 (table below) was **REVERTED**. `near_thr=0.50`, `counter_thr=1.5`.
+> **⚠️ Live (5 wks, May–Jun): −$708** (whipsaw losses). Candidate for the 8-year deep-retrain test (like Atlas BTC) or disable.
+
 5th product; M1 mirror of Hermes XAU/BTC adapted for the Dow Jones index. Slug: `hermes_dji`.
 Deployed 2026-05-27.
 
+## 🆕 Current deployed config (2026-06-17)
+
+| Param | Value | Notes |
+|---|---|---|
+| `near_thr` | 0.50 | pullback band |
+| `counter_thr` | 1.5 | counter setup threshold |
+| `q_thr` | **2.5** | lowered 3.0 → 2.5 on 2026-06-17 ("more activity" pivot — was firing 0–2 trades/day) |
+| `time_block_utc` | (0, 0) | disabled |
+| `trend_slope_block` | 0.0 | disabled |
+| `sl_hard_atr` | 6.0 | |
+| `trail_atr` | 2.0 | **static** (no adaptive buckets — DJI doesn't use them) |
+| `use_orderflow` | **False** | orderflow tested neutral on Dow; M1-only ships |
+| `max_concurrent` | 4 | |
 
 ## 🧠 2026-06-09 — No filter applied
 

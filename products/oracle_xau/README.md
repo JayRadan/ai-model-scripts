@@ -1,11 +1,46 @@
 # Oracle XAU — Flagship RL-Enhanced XAUUSD Model
 
-> **Version:** **v99b q_entry** (dynamic-exit relabel) + v88 reverse-setup exit + v97 wider hard SL (6 ATR)
-> **Holdout PF:** **5.85** @ Q≥2.0 (backtest with v88+trail+6×ATR exits) | **WR:** **87.9%** | **+473R / N=174**
-> **Bundle:** `oracle_xau_validated.pkl` | **min_q:** 3.0 (raised from 0.3 — v99b Q-distribution runs higher)
-> **Deployed:** v84 2026-05-06 → v88 2026-05-08 → v89 2026-05-10 → v90 2026-05-12 → v97 2026-05-13 → **v99b 2026-05-17 (commit `e2e9681`)**
+> **Version:** **smart pipeline PRO** (`smart_routing_mode=PRO`, `smart_2regime_version=v2-2regime-2026-06-23`, base `v84-rl+v87-giveback+v1-smart-upside-2026-06-22`)
+> **Routing:** **PRO (with-trend)** — fire only when the M15/M30 TFK direction **matches** the trade direction. Replaced the ANTI (counter-trend) gate on 2026-06-23.
+> **Holdout (2-regime smart, 2.4y):** combined **PF 1.73** / WR 55.5% / +18,697R / DD 873R / n=14,940 · Up-regime PF **1.99** (n=9,174) · Down-regime PF **1.38** (n=5,766)
+> **Bundle:** `oracle_xau_validated.pkl` | **min_q:** 3.0 | smart-exit = future-upside XGBRegressor (max_hold 60, hard SL 6R EA / 5R smart, trail off) **+ BE-lock @5R→+2R**
+> **🆕 BE-lock (2026-06-25, commit `3f022fb`):** once a trade peaks ≥ 5R its floor locks at +2R — a winner can no longer round-trip into a loss. Server-side, no EA change. OOS PF 1.76→1.77, DD 271→244, WR 58→60%. (Full profit-ratchet was tested & REJECTED, PF→1.46–1.60.) Config `be_lock_r=5.0`, `be_floor_r=2.0`.
+> **Deployed:** … → v99b 2026-05-17 → smart-exit + 2-regime 2026-06-22 → PRO routing 2026-06-23 (`af76882`) → **BE-lock 2026-06-25 (`3f022fb`)**
+> **Rollback:** in the commercial repo `git revert af76882`, then restore `oracle_xau_validated.pkl.bak_pre_PRO_2026-06-23`, push.
 
-## ⚠️ v99b live notes (deployed 2026-05-17)
+## 🆕 2026-06-23 — ANTI → PRO routing (DEPLOYED, commit af76882)
+
+The 2-regime smart pipeline was retrained to trade **with-trend (PRO)** instead
+of counter-trend (ANTI). The regime filter is the **M15/M30 TFK direction**;
+PRO fires a setup only when that direction **matches** the trade direction.
+
+- **Up-regime** (M30 TFK = +1) → take **longs** (cid=0), `smart_q_entry` + `smart_confirm` heads
+- **Down-regime** (M30 TFK = −1) → take **shorts** (cid=3)
+- `smart_routing_mode="PRO"` in the bundle; the server's `decide.py` reads this flag and applies the with-trend gate (no code change needed — same routing function, opposite sign).
+- All other smart-pipeline components are retained from 2026-06-22: `smart_exit_mdl` (future-upside regressor, max_hold 60, hard SL 5R, trail off, M-TFK gated), `meta_mdl`, `giveback_mdl`, plus the live-ops stack-gate / regime-override / forecast-unblock features below.
+
+**Smart 2-regime holdout** (2024-01-01 → 2026-05-01, fully out-of-sample):
+
+| Regime | n | WR | PF | sumR | DD |
+|---|---:|---:|---:|---:|---:|
+| Up (longs)   | 9,174 | 59.2% | **1.99** | +14,544 | 435 |
+| Down (shorts)| 5,766 | 49.5% | 1.38 | +4,153 | 842 |
+| **Combined** | 14,940 | 55.5% | **1.73** | +18,697 | 873 |
+
+**Why PRO:** Oracle's counter-trend (ANTI) gate was firing shorts into M30
+uptrends; the [Oracle PRO routing deploy](../../) walk-forward showed with-trend
+routing generalizes better (XAU WF PF 1.73, BTC 2.05). PRO also aligns Oracle
+with the band-pullback PRO gate now used by Hermes/Atlas.
+
+**Today's live sim (2026-06-24, server-exact via `decide.decide_entry/decide_exit`):**
+see the SUMMARY at the bottom of this update / the run output — scripts/10_sim_today.py.
+
+---
+
+<details>
+<summary>📦 HISTORY — pre-2026-06-23 notes. NOTE: routing (ANTI→PRO), exit (→smart-exit) and q_entry (→2-regime smart) are SUPERSEDED above; the Live Operations Tooling (stack-gate / regime-override / forecast-unblock) below is STILL ACTIVE.</summary>
+
+## v99b live notes (deployed 2026-05-17)
 
 Only `q_entry` (5 XGBRegressors) was swapped. All other components retained from v97:
 confirm heads (`mdls`), `meta_mdl`, `exit_mdl`, `giveback_mdl`, exit_feats, meta_feats.
@@ -138,12 +173,12 @@ Backtest uses production-matching exit stack: v88 reverse-setup + trail (after +
 - **min_q**: bumped 0.3 → 3.0 because v99b Q-values run higher than v97 (e.g. C0 zeros Q≈3.0 vs v97 Q≈2.0). With min_q=3.0 v99b is slightly more conservative than v90 with min_q=0.3 was.
 
 ### Files
-- `experiments/v99_rl_relabel/01_label.py` — labeler (smoke test on 30 days)
-- `experiments/v99_rl_relabel/03_label_full.py` — full XAU + BTC labeling
-- `experiments/v99_rl_relabel/06_add_features_retrain.py` — final 23-feat retrain
-- `experiments/v99_rl_relabel/08_backtest_with_v88_exit.py` — backtest with prod-matching exits
-- `experiments/v99_rl_relabel/09_build_deploy_bundle.py` — packages v99b q_entry into prod-pkl format
-- `experiments/v99_rl_relabel/q_models_xau_v99b_23feat.pkl` — source (q_entry only)
+- `products/_shared/oracle_build/v99_rl_relabel/01_label.py` — labeler (smoke test on 30 days)
+- `products/_shared/oracle_build/v99_rl_relabel/03_label_full.py` — full XAU + BTC labeling
+- `products/_shared/oracle_build/v99_rl_relabel/06_add_features_retrain.py` — final 23-feat retrain
+- `products/_shared/oracle_build/v99_rl_relabel/08_backtest_with_v88_exit.py` — backtest with prod-matching exits
+- `products/_shared/oracle_build/v99_rl_relabel/09_build_deploy_bundle.py` — packages v99b q_entry into prod-pkl format
+- `products/_shared/oracle_build/v99_rl_relabel/q_models_xau_v99b_23feat.pkl` — source (q_entry only)
 - `commercial/server/decision_engine/models/oracle_xau_validated.pkl` — deployed full bundle
 - `commercial/server/decision_engine/models/oracle_xau_validated.pkl.bak_pre_v99b` — rollback backup
 
@@ -224,8 +259,8 @@ Validated on the unseen 30% of v84 RL trades (XAU 421 trades,
 | Hard SL hits | 52 | 42 | -10 |
 | Max-hold exits | 243 | 191 | -52 |
 
-Source: `experiments/v88_exit_rl/13_reverse_setup_exit.py`. See
-`experiments/v88_exit_rl/README.md` for the full 13-experiment catalog
+Source: `products/_shared/oracle_build/v88_exit_rl/13_reverse_setup_exit.py`. See
+`products/_shared/oracle_build/v88_exit_rl/README.md` for the full 13-experiment catalog
 (12 disproven attempts + this winner).
 
 ---
@@ -283,7 +318,7 @@ source .venv/bin/activate
 python3 products/oracle_xau/train_rl_entry.py
 ```
 
-The script (`train_rl_entry.py`, originally `experiments/v84_rl_entry/01_q_learning.py`):
+The script (`train_rl_entry.py`, originally `this folder (train_rl_entry.py)`):
 
 1. Loads swing data (590K bars, ~407 MB)
 2. Merges 4h-step regime labels onto all setups
@@ -302,7 +337,7 @@ The script (`train_rl_entry.py`, originally `experiments/v84_rl_entry/01_q_learn
 
 ## v83c Shared Improvements
 
-All products inherit these from `experiments/v83_range_position_filter/`:
+All products inherit these from `products/_shared/data/`:
 
 1. **4h-step regime** (window=288, step=48) — catches regime changes 6× faster
    than the original bar-by-bar classification
@@ -402,12 +437,12 @@ All scripts in `scripts/` — run in order to reproduce from scratch:
 ### v88 Exit Improvement Experiments
 None of these change the model bundle — they only modify the runtime
 exit logic in `commercial/server/decision_engine/decide.py`. See
-`experiments/v88_exit_rl/README.md` for the full catalog.
+`products/_shared/oracle_build/v88_exit_rl/README.md` for the full catalog.
 
 | Script | Outcome |
 |---|---|
-| `experiments/v88_exit_rl/13_reverse_setup_exit.py` | ✅ DEPLOYED — PF 4.18 → 4.54, MaxDD -5R |
-| `experiments/v88_exit_rl/01..12_*.py` | ❌ All disproven on unseen 30% — see README |
+| `products/_shared/oracle_build/v88_exit_rl/13_reverse_setup_exit.py` | ✅ DEPLOYED — PF 4.18 → 4.54, MaxDD -5R |
+| `products/_shared/oracle_build/v88_exit_rl/01..12_*.py` | ❌ All disproven on unseen 30% — see README |
 | `experiments/v87_multi_head_exit/` | ❌ -866R on unseen, REMOVED 2026-05-08 |
 
 Also in root:
@@ -418,3 +453,5 @@ Also in root:
 - `_shared/scripts/build_regime_selector.py` — K=5 K-means + relabel rules
 - `_shared/regime_selector_xau.json` — Pre-built XAU regime selector
 - `_shared/04b_compute_physics_features.py` — Physics feature computer
+
+</details>

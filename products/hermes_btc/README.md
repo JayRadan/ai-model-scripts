@@ -1,7 +1,41 @@
 # Hermes BTC — M1 BTCUSD TFK + Order-Flow
 
+> **⚠️ STATUS 2026-06-25:** restored to **first-deploy** by commit `d187ecc` ("revert all 6 products to first-deploy"). **Deployed `q_thr=2.5`** — the 2026-06-17 raise to 3.0 (noted below) was **REVERTED**. `near_thr=0.50`.
+> **Live (5 wks, May–Jun): +$226** — marginally positive, not robustness-validated. Could get the 8-year deep-retrain test.
+
 **Status:** DEPLOYED 2026-05-26 (commit `588a6af` in commercial repo)
 **Version:** v103-derived (Hermes architecture, BTC-trained bundle)
+
+---
+
+## 🆕 Current deployed config (2026-06-17)
+
+| Param | Value | Notes |
+|---|---|---|
+| `near_thr` | 0.50 | pullback band |
+| `q_thr` | **3.0** | lowered 4.0 → 3.0 on 2026-06-17 ("more activity" pivot) |
+| `trend_slope_block` | 1.5 | block counter entries when |slope20| > 1.5 |
+| `time_block_utc` | (0, 0) | disabled — 24/7 market |
+| `sl_hard_atr` | 6.0 | entry-anchored hard SL |
+| `trail_buckets` | (1.0, 2.0, 4.0) | **adaptive** (added 2026-06-16) |
+| `max_concurrent` | 4 | |
+| `be_trigger_r` | 0.5 | BE-on-new-entry trigger |
+
+### 2026-06-17 — q_thr 4.0 → 3.0
+Live was firing 2–3 trades/day at Q≥4. Lowered to 3 to target ~5–7 trades/day.
+Backtest PF likely drops ~3.0 → ~2.4, but live $ expected to rise.
+
+### 2026-06-16 — Adaptive bucketed trail (deployed)
+Replaced static `trail_atr=2.0` with MFE-bucketed multipliers:
+
+| MFE so far | Trail width |
+|---|---|
+| < 2R   | 1.0 × ATR |
+| 2–5R   | 2.0 × ATR |
+| ≥ 5R   | 4.0 × ATR |
+
+8mo unseen Dukascopy holdout: static 2.0 → PF 2.90, DD 195R, $206K @ 0.10 →
+adaptive → PF ~3.3, DD ~180R. Matches the hermes_xau pattern.
 
 ---
 

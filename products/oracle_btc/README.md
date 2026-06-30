@@ -1,5 +1,10 @@
 # Oracle BTC — RL-Enhanced BTCUSD Model
 
+> **✅ DEPLOYED (verified 2026-06-30):** Oracle smart-pipeline (v99b dynamic-exit relabel, min_q 3)
+> + **breakeven-lock**. **M5 BTCUSD, 2 slots, hard SL 6×ATR.** Bundle `oracle_btc_validated.pkl`
+> version `v99b_dynamic_exit_relabel_minq3…`. Redeployed on deep retrain. Catalog: [`../README.md`](../README.md).
+> ⚠️ **Detail below is historical** — quoted PFs predate look-ahead corrections.
+
 > **Version:** **smart pipeline PRO** (`smart_pipeline_version=v103-btc-2026-06-23`, `smart_routing_mode=PRO`, base `v99b_dynamic_exit_relabel_minq3`)
 > **Routing:** **PRO (with-trend)** — fire only when the M15/M30 TFK direction **matches** the trade direction. Replaced the ANTI gate on 2026-06-23.
 > **Walk-forward (PRO):** combined **PF 2.05** (see [Oracle PRO routing deploy](../../))

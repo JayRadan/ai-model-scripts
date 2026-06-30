@@ -1,5 +1,11 @@
 # Oracle XAU — Flagship RL-Enhanced XAUUSD Model
 
+> **✅ DEPLOYED (verified 2026-06-30):** Oracle smart-pipeline — rule cascade + maturity-aware `q_entry`
+> + RL reverse-setup exit + **breakeven-lock** (peak ≥5R → floor locks +2R, since 2026-06-25).
+> **M5 XAUUSD, 6 slots, hard SL 6×ATR.** Bundle `oracle_xau_validated.pkl` version
+> `v84-rl+v87-giveback+v1-smart-upside…`. The most look-ahead-scrutinised product. Catalog: [`../README.md`](../README.md).
+> ⚠️ **The detail below is historical** — quoted PFs predate look-ahead corrections; do not quote externally.
+
 > **Version:** **smart pipeline PRO** (`smart_routing_mode=PRO`, `smart_2regime_version=v2-2regime-2026-06-23`, base `v84-rl+v87-giveback+v1-smart-upside-2026-06-22`)
 > **Routing:** **PRO (with-trend)** — fire only when the M15/M30 TFK direction **matches** the trade direction. Replaced the ANTI (counter-trend) gate on 2026-06-23.
 > **Holdout (2-regime smart, 2.4y):** combined **PF 1.73** / WR 55.5% / +18,697R / DD 873R / n=14,940 · Up-regime PF **1.99** (n=9,174) · Down-regime PF **1.38** (n=5,766)

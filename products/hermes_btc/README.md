@@ -1,5 +1,9 @@
 # Hermes BTC — M1 BTCUSD TFK + Order-Flow
 
+> **✅ DEPLOYED (verified 2026-06-30):** TFK combined-Q (pullback OR counter), **q≥2.5, 1 slot,
+> SL 4×ATR / trail 3×ATR**, M1 BTCUSD. Live bundle has **no version** (first-deploy / standard hermes path).
+> Catalog: [`../README.md`](../README.md). ⚠️ **Detail below is historical.**
+
 > **⚠️ STATUS 2026-06-25:** restored to **first-deploy** by commit `d187ecc` ("revert all 6 products to first-deploy"). **Deployed `q_thr=2.5`** — the 2026-06-17 raise to 3.0 (noted below) was **REVERTED**. `near_thr=0.50`.
 > **Live (5 wks, May–Jun): +$226** — marginally positive, not robustness-validated. Could get the 8-year deep-retrain test.
 

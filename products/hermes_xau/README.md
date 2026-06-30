@@ -1,5 +1,11 @@
 # Hermes XAU — M1 TFK-driven + order-flow Q (combined pullback / counter)
 
+> **✅ DEPLOYED (verified 2026-06-30):** TFK combined-Q (pullback ≤0.5 ATR **OR** counter ≥1.5 ATR),
+> **q≥1.0, 1 slot, SL 4×ATR / trail 3×ATR**, M1 XAUUSD (+ orderflow). **Reverted to first-deploy
+> 2026-06-25** — the 2026-06-23 band-pullback experiment was rolled back; the live bundle has **no
+> version** (standard hermes path). ⚠️ Honest causal edge is weak (HTF look-ahead removed).
+> Catalog: [`../README.md`](../README.md). **Detail below mixes historical band-pullback + combined-Q — treat as historical.**
+
 > **⚠️ STATUS 2026-06-25:** deployed = **TFK combined-Q order-flow architecture** (restored by commit `d187ecc` "revert all 6 products to first-deploy"). The band-pullback v1 below (ed295bb, 2026-06-23) was **REVERTED** and is **NOT live**.
 > **Deployed config:** TFK-driven M1 + order-flow; entry gate `near_thr=0.50` (pullback) ∪ counter setup; `q_thr=1.0`; SL 4×ATR, trail 3×ATR, BE-on-new-entry, `max_concurrent=1`. Bundle `hermes_xau_validated.pkl` (first-deploy).
 > **⚠️ Live (5 wks, May–Jun): −$866.** Honest edge weak — backtests were HTF look-ahead-inflated (~PF 1.2). Candidate for the 8-year deep-retrain test (like Atlas BTC) or disable.

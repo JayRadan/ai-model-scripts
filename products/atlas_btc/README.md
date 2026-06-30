@@ -1,5 +1,10 @@
 # Atlas BTC — STRICT 2-bar candle reversal (Kalman + Hermes TFK), 8-YEAR deep retrain (Bitcoin)
 
+> **✅ DEPLOYED (verified 2026-06-30):** Atlas strict-candle 2-bar reversal (TFK regime + M1 Kalman
+> confluence + strong prev-bar body), **8-year deep retrain** (2026-06-26). **M1 BTCUSD, 1 slot,
+> SL 6×ATR / trail 2×ATR / BE@0.5R, q≥3.0.** Live bundle has **no version** (standard atlas path).
+> Redeployed after the original short-window train overfit. Catalog: [`../README.md`](../README.md).
+
 > **Version:** **strict-candle 8y-deep** (`atlas_btc_8y_2026-06-26`) — **DEPLOYED, commit `cd911ca`**
 > **Architecture:** identical engine to Atlas DOW/XAU — M1 Kalman regime + M1 Hermes TFK, **STRICT 2-bar candle-reversal** confirmation gated by both-lines + `kf_age≥3`; XGBRegressor Q trained only on MFE≥2R candidates. **54 features** (Kalman state + TFK + 18 standard + 14 order-flow).
 > **Bundle:** `atlas_btc_validated.pkl` (8-year retrain, `q_thr=3.0`, SL 6×ATR / TRAIL 2×ATR / MAXH 300, BE @ +0.5R, `max_concurrent=1`, spread 0.30 R-units)

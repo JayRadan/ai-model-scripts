@@ -1,6 +1,24 @@
-# Atlas XAU — STRICT 2-bar candle reversal (Kalman + Hermes TFK) — ⚠️ EDGE DEAD
+# Atlas XAU — now runs the `edge_pullback` engine (was: strict-candle, EDGE DEAD)
 
-> **⚠️ STATUS 2026-06-26:** deployed = **strict-candle first-deploy** (restored 2026-06-25, commit `d187ecc` "revert all 6 products to first-deploy"). The ushape_m15 documented below was **reverted**. An **8-year deep retrain confirmed the XAU strict-candle edge is DEAD** — cross-regime holdout PF **0.95** (losing), 6th disconfirmation. **NOT redeployed; recommend DISABLE live.** Contrast Atlas BTC, whose edge *survived* the same 8-year test (deployed `cd911ca`). Repro: `experiments/atlas_retrain_like_dow/` (`train.py`).
+> **🚀 STATUS 2026-06-30 — REPLACED with the `edge_pullback` engine (commit `064aeee`).**
+> The strict-candle XAU strategy was **DEAD** (8y holdout PF 0.95, 6 disconfirmations). It is **gone**.
+> Atlas XAU now runs the same **pullback + XGB-expected-R** edge deployed on hermes_dji.
+> Server engine: `decision_engine/edge_pullback.py`, routed by bundle `version="edge_pullback_v1_atlas_xau"`.
+> **1 slot, ~11 trades/day.** Rollback: `models/atlas_xau_validated.pkl.bak_pre_edge_pullback_2026-06-30`.
+>
+> **Deployed config:** entry = `committed_dir != 0` AND `|close−tfk_line|/ATR ≤ 1.0`; XGBRegressor predicts gross R,
+> take if `pred_R ≥ 0.573`; exit = EA-side **SL 6×ATR + trail 2×ATR**, max_hold 300. Trained through 2026-06-30 (8y, ~740k candidates).
+>
+> **8-year walk-forward (1pt spread, causal HTF):** same recipe generalises to XAU — standalone +3890R, daily Sharpe ~2.2;
+> DJI+XAU portfolio Sharpe **3.6**, daily correlation **0.04** (true diversification).
+>
+> **🚨 BIGGEST CAVEAT — read this:** this edge **contradicts the prior "XAU M1 is dead" evidence** (PF 0.95 strict-candle, RL
+> breakeven, etc.). It used a **0.15R flat spread**, but real XAU spread-in-R is likely ~0.3R (**double**), which could halve
+> the XAU edge to near-breakeven. **XAU is the WEAKER, less-trusted of the two deployments** — watch it closely, and be ready
+> to revert via the `.bak`. The DJI edge is far more validated. Re-run an XAU-specific cost-sensitivity check before trusting size.
+
+---
+<details><summary>Historical (pre-2026-06-30: strict-candle / ushape, EDGE DEAD)</summary>
 >
 > **Version (HISTORICAL, REVERTED 2026-06-25):** **ushape_m15** (deployed 2026-06-17) — replaced prior STRICT-candle architecture
 > **Architecture:** M15 Kalman macro regime + M1 Kalman U-shape edge-detected reversal
@@ -171,3 +189,5 @@ edge tight.
 |---|---|---|
 | 2026-06-02 | Initial deploy, q_thr=1.0 | Maximize trade rate; PF acceptable |
 | 2026-06-04 | q_thr 1.0 → **2.0** | Halve DD on stretched days; small 30d cost (-5.5%) for better post-deploy quality |
+
+</details>

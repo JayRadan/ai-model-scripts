@@ -1,7 +1,24 @@
 # Hermes DJI — M1 Dow Jones (US30)
 
-> **⚠️ STATUS 2026-06-25:** restored to **first-deploy** by commit `d187ecc` ("revert all 6 products to first-deploy"). **Deployed `q_thr=3.0`** — the 2026-06-17 lowering to 2.5 (table below) was **REVERTED**. `near_thr=0.50`, `counter_thr=1.5`.
-> **⚠️ Live (5 wks, May–Jun): −$708** (whipsaw losses). Candidate for the 8-year deep-retrain test (like Atlas BTC) or disable.
+> **🚀 STATUS 2026-06-30 — REPLACED with the `edge_pullback` engine (commit `064aeee`).**
+> The old combined-Q / `q_thr=3.0` strategy (which lost −$708 live over May–Jun) is **gone**.
+> New strategy = **pullback + XGB-expected-R** (see below). Server engine: `decision_engine/edge_pullback.py`,
+> routed by bundle `version="edge_pullback_v1_hermes_dji"`. **1 slot, ~11 trades/day.**
+> Rollback: `models/hermes_dji_validated.pkl.bak_pre_edge_pullback_2026-06-30`.
+>
+> **Deployed config:** entry = `committed_dir != 0` AND `|close−tfk_line|/ATR ≤ 1.0` (pullback to TFK line),
+> direction = `committed_dir`; XGBRegressor predicts gross R, take if `pred_R ≥ 0.559`; exit = EA-side
+> **SL 6×ATR + trail 2×ATR**, max_hold 300. Bundle trained through 2026-06-30 on 8y M1 (~700k candidates).
+>
+> **8-year walk-forward (train-only thresholds, causal HTF, 1pt spread):** +4811R, **12/12 windows positive**,
+> +0.30R/trade, maxDD 149R, ~10/day, daily Sharpe ~3.0. Shorts profitable; made +R in the 2022 bear (not beta).
+>
+> **⚠️ HONEST CAVEATS:** thin edge (**+0.27R/trade net@1pt**), **spread-sensitive** (breakeven ≈ 3pt — needs a
+> tight US30 broker); **never forward-tested** before deploy. ~57% of *days* are positive — **6–9-day losing
+> streaks are NORMAL** (a 2-week loss is expected variance, not a failure). Monitor; revert via the `.bak` if it bleeds.
+
+---
+<details><summary>Historical (pre-2026-06-30, the retired q_thr strategy)</summary>
 
 5th product; M1 mirror of Hermes XAU/BTC adapted for the Dow Jones index. Slug: `hermes_dji`.
 Deployed 2026-05-27.
@@ -78,3 +95,5 @@ instant tuning push without code changes.
 
 Feature engineering (`add_standard_features`) comes from `products/_shared/m1_with_orderflow.py`
 (shared with Hermes XAU/BTC). TFK is duplicated per product in `tfk.py`.
+
+</details>

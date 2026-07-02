@@ -1,0 +1,35 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    3s] 2,916,410 bars 2018-01-01 -> 2026-05-01
+[   33s] features done
+[   34s] candidates 710,271  XA 29 feats, XB 43 feats
+[   35s] labels done, overall doom rate 16.6%
+[   70s] window 2020-07-01 done
+[   93s] window 2021-01-01 done
+[  114s] window 2021-07-01 done
+[  136s] window 2022-01-01 done
+[  159s] window 2022-07-01 done
+[  182s] window 2023-01-01 done
+[  204s] window 2023-07-01 done
+[  227s] window 2024-01-01 done
+[  247s] window 2024-07-01 done
+[  269s] window 2025-01-01 done
+[  292s] window 2025-07-01 done
+[  315s] window 2026-01-01 done
+
+======================================================================================
+ORDER-FLOW entry lab, XAU — DEV (selection)
+======================================================================================
+model                       n  /day  net@10c  net@20c  net@30c  w+@20   WR%  SLhit%
+A_29feats (deployed)    12589  10.9    +7111    +3865     +618   9/9     66    16.4
+B_+orderflow            12702  11.0    +6779    +3476     +174   9/9     66    16.6
+
+======================================================================================
+ORDER-FLOW entry lab, XAU — HOLDOUT (untouched)
+======================================================================================
+model                       n  /day  net@10c  net@20c  net@30c  w+@20   WR%  SLhit%
+A_29feats (deployed)     4237  12.5    +2813    +2467    +2121   3/3     77    16.0
+B_+orderflow             4528  13.0    +3117    +2733    +2348   3/3     77    16.5
+
+flow-model anti-doom ranking AUC on test candidates (median): 0.495
+[  315s] orderflow lab done

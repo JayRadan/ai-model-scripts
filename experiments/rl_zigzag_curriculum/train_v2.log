@@ -1,0 +1,37 @@
+[     0s] loading DJI M1...
+[     9s] 2,833,251 bars, zigzag legs mean len 31 bars
+[     9s] === VARIANT REH ===
+[   169s]   phase P1_2018-19 done | P1_2018-19: PF 0.89 -1135R
+[   330s]   phase P2_2020-21 done | P1_2018-19: PF 0.94 -616R | P2_2020-21: PF 0.90 -957R
+[   492s]   phase P3_2022-23 done | P1_2018-19: PF 1.08 +547R | P2_2020-21: PF 0.94 -456R | P3_2022-23: PF 1.09 +602R
+[   656s]   phase P4_2024 done | P1_2018-19: PF 1.08 +611R | P2_2020-21: PF 1.10 +775R | P3_2022-23: PF 1.09 +696R | P4_2024: PF 0.99 -21R
+[   670s] === VARIANT JOINT ===
+[  1300s]   phase JOINT_ALL done | P1_2018-19: PF 0.77 -1823R | P2_2020-21: PF 0.80 -1577R | P3_2022-23: PF 0.88 -829R | P4_2024: PF 0.82 -708R
+
+==========================================================================================
+FORGETTING MATRIX (PF on each chunk after each phase) — REH vs NOREH
+==========================================================================================
+
+[REH]
+  after P1_2018-19   P1_2018-19:  0.89
+  after P2_2020-21   P1_2018-19:  0.94  P2_2020-21:  0.90
+  after P3_2022-23   P1_2018-19:  1.08  P2_2020-21:  0.94  P3_2022-23:  1.09
+  after P4_2024      P1_2018-19:  1.08  P2_2020-21:  1.10  P3_2022-23:  1.09  P4_2024:  0.99
+
+[JOINT]
+  after JOINT_ALL    P1_2018-19:  0.77  P2_2020-21:  0.80  P3_2022-23:  0.88  P4_2024:  0.82
+
+==========================================================================================
+FINAL EVAL (net @ 1.5pt spread) — all chunks + UNTOUCHED HOLDOUT
+==========================================================================================
+chunk                                  REH                     JOINT
+P1_2018-19        PF  1.08     +611R  2.7/d  PF  0.77    -1823R  7.6/d
+P2_2020-21        PF  1.10     +775R  2.8/d  PF  0.80    -1577R  7.4/d
+P3_2022-23        PF  1.09     +696R  2.6/d  PF  0.88     -829R  7.3/d
+P4_2024           PF  0.99      -21R  2.7/d  PF  0.82     -708R  7.6/d
+HOLDOUT_2025+     PF  0.96     -227R  2.7/d  PF  0.92     -431R  7.5/d
+Traceback (most recent call last):
+  File "/home/jay/Desktop/new-model-zigzag/experiments/rl_zigzag_curriculum/train_rl_zigzag_v2.py", line 289, in <module>
+    eq = RES[vn][HOLD[0]]["eq"]
+         ~~~^^^^
+KeyError: 'NOREH'

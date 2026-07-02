@@ -1,0 +1,44 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[   31s] features done
+[   32s] global sims...
+[   35s] sims done
+[   62s] window 2020-07-01 done
+[   90s] window 2021-01-01 done
+[  117s] window 2021-07-01 done
+[  143s] window 2022-01-01 done
+[  169s] window 2022-07-01 done
+[  198s] window 2023-01-01 done
+[  223s] window 2023-07-01 done
+[  248s] window 2024-01-01 done
+[  273s] window 2024-07-01 done
+[  302s] window 2025-01-01 done
+[  333s] window 2025-07-01 done
+[  369s] window 2026-01-01 done
+
+====================================================================================
+PLATEAU — trail 2 -> tight_trail after tight_after bars (net R, ~11/day)
+====================================================================================
+config           DEV net@20 DEV net@30  DEV w+ HOLD net@20 HOLD net@30  HOLD w+
+base (no tt)          -1787      -4811    1/9        +1080        +776     3/3 
+ta= 30 tt=0.75        +2745       -392    8/9        +2301       +1957     3/3 
+ta= 30 tt=1.0         +1151      -2057    7/9        +1766       +1428     3/3 
+ta= 30 tt=1.5         -1073      -4169    2/9        +1256        +934     3/3 
+ta= 45 tt=0.75        +2233       -920    8/9        +2159       +1821     3/3 
+ta= 45 tt=1.0          +912      -2198    6/9        +1877       +1548     3/3 
+ta= 45 tt=1.5         -1007      -4088    1/9        +1067        +747     3/3 
+ta= 60 tt=0.75        +1580      -1579    8/9        +2103       +1771     3/3 
+ta= 60 tt=1.0          +587      -2533    6/9        +1809       +1485     3/3 
+ta= 60 tt=1.5         -1265      -4319    1/9        +1031        +711     3/3 
+ta= 90 tt=0.75          +82      -3034    5/9        +1666       +1339     3/3 
+ta= 90 tt=1.0          -708      -3820    3/9        +1448       +1126     3/3 
+ta= 90 tt=1.5         -1257      -4329    1/9        +1120        +809     3/3 
+ta=120 tt=0.75         -273      -3404    4/9        +1651       +1330     3/3 
+ta=120 tt=1.0          -770      -3874    1/9        +1540       +1224     3/3 
+ta=120 tt=1.5         -1424      -4488    1/9        +1235        +924     3/3 
+lm ta60 tt1.0          +770      -2342    7/9        +1600       +1265     3/3    (model trained on tt60 labels)
+
+holding bars [base]: mean 56  median 36  p90 125  max 300
+
+holding bars [tt60]: mean 45  median 35  p90 73  max 300
+[  369s] sweep done

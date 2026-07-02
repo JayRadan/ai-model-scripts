@@ -1,0 +1,102 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    1s] 2,951,885 bars 2018-01-01 -> 2026-05-01
+[   43s] features done
+[   44s] candidates 729,301 | median ATR $0.467 (2025+: $1.378)
+[   44s] running global sims...
+[   49s]   base             fill 100.0%  mean gross R +0.424
+[   49s]   sl5              fill 100.0%  mean gross R +0.401
+[   49s]   belock           fill 100.0%  mean gross R +0.296
+[   49s]   tt60             fill 100.0%  mean gross R +0.614
+[   49s]   trail15          fill 100.0%  mean gross R +0.426
+[   49s]   trail3           fill 100.0%  mean gross R +0.424
+[   49s]   lim030           fill  79.8%  mean gross R +0.332
+[   49s]   lim050           fill  69.6%  mean gross R +0.329
+[   49s]   confirm          fill  48.9%  mean gross R +0.420
+[   49s]   lim030_belock    fill  79.8%  mean gross R +0.205
+[   49s]   lim050_belock    fill  69.6%  mean gross R +0.200
+[   49s]   confirm_belock   fill  48.9%  mean gross R +0.292
+[   49s]   lim030_tt60      fill  79.8%  mean gross R +0.520
+[  110s] window 2020-07-01 done (thr_base=0.804)
+[  163s] window 2021-01-01 done (thr_base=0.826)
+[  214s] window 2021-07-01 done (thr_base=0.783)
+[  262s] window 2022-01-01 done (thr_base=0.744)
+[  311s] window 2022-07-01 done (thr_base=0.717)
+[  360s] window 2023-01-01 done (thr_base=0.695)
+[  406s] window 2023-07-01 done (thr_base=0.705)
+[  451s] window 2024-01-01 done (thr_base=0.700)
+[  495s] window 2024-07-01 done (thr_base=0.706)
+[  545s] window 2025-01-01 done (thr_base=0.665)
+[  595s] window 2025-07-01 done (thr_base=0.626)
+[  644s] window 2026-01-01 done (thr_base=0.636)
+
+================================================================================================
+ATLAS XAU entry/exit lab — DEV windows (2020-07 .. 2024-12), train-only thr ~11/day, 1-slot
+================================================================================================
+variant                 n  /day   gross  net@10c  net@20c  net@30c  w+@20   WR%  DD@20
+V0_deployed         12510  10.8   +4261    +1237    -1787    -4811   1/9     62   2081
+X_sl5               12789  11.0   +3539     +367    -2804    -5975   1/9     56   3028
+X_belock            12469  10.7   +2546     -476    -3497    -6519   0/9     53   3623
+X_tt60              12447  10.7   +6827    +3707     +587    -2533   6/9     64    733
+X_tier_trail        12328  10.6   +4532    +1510    -1511    -4533   2/9     62   1774
+E_lim030            12508  10.8   +2832     -194    -3219    -6245   0/9     61   3480
+E_lim050            12546  10.8   +3700     +643    -2414    -5472   1/9     62   2671
+E_confirm           12401  10.7   +3460     +511    -2438    -5387   1/9     62   2820
+E_q30gate           11798  10.2   +4260    +1521    -1217    -3956   2/9     63   1834
+C_lim030_belock     12496  10.8   +1253    -1771    -4795    -7819   0/9     53   5000
+C_lim050_belock     12437  10.7   +2059     -974    -4008    -7041   0/9     53   4203
+C_confirm_belock    12444  10.7   +1978     -983    -3944    -6905   1/9     53   4113
+C_lim030_tt60       12450  10.7   +6096    +2986     -123    -3232   4/9     63    825
+C_q30_belock        11788  10.2   +2913     +179    -2555    -5288   2/9     54   2942
+
+DEV WINNER by net@20c: X_tt60
+
+================================================================================================
+HOLDOUT windows (2025-01 .. 2026-05) — untouched by selection
+================================================================================================
+variant                 n  /day   gross  net@10c  net@20c  net@30c  w+@20   WR%  DD@20
+V0_deployed          3835  11.2   +1687    +1383    +1080     +776   3/3     70    181 <== deployed
+X_sl5                4123  12.0   +1435    +1109     +782     +456   3/3     63    168
+X_belock             3831  11.2   +1308    +1005     +701     +398   3/3     69    206
+X_tt60               4061  11.9   +2458    +2133    +1809    +1485   3/3     74    130 <== DEV WINNER
+X_tier_trail         3661  10.6   +1695    +1394    +1093     +792   3/3     68    185
+E_lim030             3791  11.0   +1370    +1062     +755     +447   3/3     68    194
+E_lim050             3726  10.9   +1292     +989     +685     +382   3/3     68    172
+E_confirm            3711  10.8   +1546    +1248     +950     +652   3/3     69    210
+E_q30gate            3010   8.6   +1352    +1095     +837     +580   3/3     69    191
+C_lim030_belock      3827  11.1    +968     +658     +348      +38   2/3     67    244
+C_lim050_belock      3761  10.9    +870     +563     +256      -51   2/3     66    269
+C_confirm_belock     3676  10.7   +1028     +732     +436     +140   3/3     68    254
+C_lim030_tt60        3974  11.6   +2250    +1926    +1602    +1278   3/3     73    170
+C_q30_belock         3039   8.7   +1022     +762     +502     +241   3/3     68    241
+
+--- V0_deployed per window ---
+2020-07-01  n=1365  10.4/d gross   +299 net20   -265 net30   -546 WR  62% PF 0.90
+2021-01-01  n=1188   9.4/d gross   +485 net20    -76 net30   -356 WR  63% PF 0.97
+2021-07-01  n=1406  10.8/d gross   +477 net20   -364 net30   -784 WR  60% PF 0.87
+2022-01-01  n=1412  11.0/d gross   +366 net20   -284 net30   -609 WR  62% PF 0.90
+2022-07-01  n=1449  11.1/d gross   +506 net20   -200 net30   -553 WR  61% PF 0.93
+2023-01-01  n=1390  10.9/d gross   +472 net20   -192 net30   -525 WR  62% PF 0.93
+2023-07-01  n=1467  11.5/d gross   +733 net20   -255 net30   -749 WR  59% PF 0.91
+2024-01-01  n=1374  10.6/d gross   +325 net20   -271 net30   -569 WR  63% PF 0.90
+2024-07-01  n=1459  11.2/d gross   +598 net20   +120 net30   -120 WR  66% PF 1.04
+2025-01-01  n=1367  10.6/d gross   +501 net20   +220 net30    +79 WR  67% PF 1.08
+2025-07-01  n=1497  11.5/d gross   +663 net20   +412 net30   +286 WR  70% PF 1.16
+2026-01-01  n= 971  11.4/d gross   +523 net20   +448 net30   +410 WR  72% PF 1.26
+
+--- X_tt60 per window ---
+2020-07-01  n=1329  10.2/d gross   +751 net20   +189 net30    -92 WR  67% PF 1.09
+2021-01-01  n=1240   9.8/d gross   +723 net20   +107 net30   -201 WR  63% PF 1.05
+2021-07-01  n=1370  10.5/d gross   +776 net20    -66 net30   -487 WR  63% PF 0.97
+2022-01-01  n=1368  10.7/d gross   +585 net20    -75 net30   -404 WR  63% PF 0.97
+2022-07-01  n=1398  10.8/d gross   +795 net20    +89 net30   -264 WR  63% PF 1.04
+2023-01-01  n=1462  11.5/d gross   +751 net20    +28 net30   -334 WR  63% PF 1.01
+2023-07-01  n=1520  11.9/d gross   +733 net20   -328 net30   -858 WR  58% PF 0.88
+2024-01-01  n=1338  10.3/d gross   +652 net20    +57 net30   -241 WR  66% PF 1.03
+2024-07-01  n=1422  10.9/d gross  +1061 net20   +586 net30   +348 WR  69% PF 1.28
+2025-01-01  n=1400  10.9/d gross   +768 net20   +474 net30   +327 WR  72% PF 1.22
+2025-07-01  n=1591  12.2/d gross   +897 net20   +630 net30   +497 WR  74% PF 1.27
+2026-01-01  n=1070  12.6/d gross   +793 net20   +705 net30   +662 WR  77% PF 1.46
+
+equity -> /home/jay/Desktop/new-model-zigzag/experiments/atlas_xau_entry_exit_lab/lab_equity.png
+[  646s] lab done

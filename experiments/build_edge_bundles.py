@@ -65,7 +65,7 @@ def fetch_tail(instr, start):
     d["time"] = pd.to_datetime(d["time"]).dt.tz_convert("UTC").dt.tz_localize(None)
     return d
 
-def build(name, parquet, instr):
+def build(name, parquet, instr, extra=None):
     log(f"=== {name} ===")
     df = pd.read_parquet(parquet).rename(columns={"timestamp": "time"})
     if "time" not in df.columns: df = df.rename(columns={[c for c in df.columns if "time" in c.lower()][0]: "time"})
@@ -82,7 +82,7 @@ def build(name, parquet, instr):
     n = len(df)
     ok = np.isfinite(atr) & (atr > 0) & (cdir != 0); ok[:300] = False; ok[-301:] = False
     idx = np.where((da <= 1.0) & ok)[0]; dirs = cdir[idx].astype(np.int64); eb = idx + 1
-    y, xit = sim_trail(idx, dirs, O, H, L, C, atr, 6.0, 2.0, 300, n)
+    y, xit = sim_trail(idx, dirs, O, H, L, C, atr, 7.0, 2.0, 300, n)   # SL7 buffer (2026-07-01)
     X = feat[FC].to_numpy(np.float32)[idx]
     log(f"  candidates {len(idx):,}, mean gross R {y.mean():+.3f}")
     m = XGBRegressor(n_estimators=500, max_depth=5, learning_rate=0.05, subsample=0.85,
@@ -96,19 +96,22 @@ def build(name, parquet, instr):
         taken = take(order.astype(np.int64), eb, xit, y, 5)
         g = abs(taken / days - 11.0)
         if g < gap: gap = g; thr = th
-    payload = {"version": f"edge_pullback_v1_{name}", "q_model": m, "feat_cols": FC,
-               "threshold": float(thr), "near_thr": 1.0, "sl_R": 6.0, "trail_R": 2.0,
+    payload = {"version": f"edge_pullback_v2_sl7_{name}", "q_model": m, "feat_cols": FC,
+               "threshold": float(thr), "near_thr": 1.0, "sl_R": 7.0, "trail_R": 2.0,
                "be_r": 0.0, "maxh": 300, "trained_through": str(df.time.iloc[-1]),
                "n_candidates": int(len(idx)),
                "recipe": "pullback |dist_tfk|<=1.0, dir=committed_dir, XGB predict gross R "
-                         "(SL6/trail2/maxhold300), take if pred>=threshold, 1-slot cooldown5"}
+                         "(SL7/trail2/maxhold300), take if pred>=threshold, 1-slot cooldown5"}
+    if extra: payload.update(extra)   # e.g. atlas_xau tt-trail (2026-07-02)
     out = MODELS / f"{name}_validated.pkl"
-    bak = MODELS / f"{name}_validated.pkl.bak_pre_edge_pullback_2026-06-30"
+    bak = MODELS / f"{name}_validated.pkl.bak_pre_sl7_2026-07-01"
     if out.exists() and not bak.exists(): shutil.copy(out, bak); log(f"  backed up -> {bak.name}")
     pickle.dump(payload, open(out, "wb"))
     log(f"  WROTE {out.name}  version={payload['version']} thr={thr:.3f}")
     return thr
 
 build("hermes_dji", "/home/jay/Desktop/new-model-zigzag/data/m1_dji_full.parquet", INSTRUMENT_IDX_AMERICA_E_D_J_IND)
-build("atlas_xau",  "/home/jay/Desktop/new-model-zigzag/data/m1_xau_full.parquet",  INSTRUMENT_FX_METALS_XAU_USD)
+build("atlas_xau",  "/home/jay/Desktop/new-model-zigzag/data/m1_xau_full.parquet",  INSTRUMENT_FX_METALS_XAU_USD,
+      extra={"tight_after": 30, "tight_trail_R": 0.75,
+             "version": "edge_pullback_v3_tt30_atlas_xau"})  # tt-trail 2026-07-02, experiments/atlas_xau_entry_exit_lab
 log("bundles built")

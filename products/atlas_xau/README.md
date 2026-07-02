@@ -1,5 +1,20 @@
 # Atlas XAU — now runs the `edge_pullback` engine (was: strict-candle, EDGE DEAD)
 
+> **🆕 2026-07-02 — time-boxed-patience trail DEPLOYED (bundle `edge_pullback_v3_tt30_atlas_xau`).**
+> Server-side exit tweak: trail stays 2×ATR for the first **30 bars**, then tightens to **0.75×ATR**
+> (`tight_after`/`tight_trail_R` bundle fields, read by `edge_pullback.decide_exit`; EA unchanged, its 2×ATR
+> real-time trail remains as backstop). Model/threshold/labels unchanged (label-matched retrain added nothing).
+> Rationale: winners resolve fast (median hold ~30 bars); what's still open after the grace window is drift that
+> bleeds R and blocks the 1-slot. Honest 8y WF (train-only thr ~11/day, net @ $0.20 spread): dev 2020-24
+> **−1,787R → +2,745R (8/9 windows +)**, untouched holdout 2025-26 **+1,080R → +2,301R (3/3, WR 70→74%,
+> maxDD 181→130R)**; wins at $0.10/0.20/0.30 spread and in gross. Broad parameter plateau (tighten-after 10-60
+> bars × trail 0.5-1.0 all positive); uniform tight trail from bar 1 is ~breakeven — the edge is the time-boxing.
+> Also disproven in the same lab: limit entries (0.3/0.5×ATR), confirm-bar entry, q30 quantile gate, **BE-lock
+> (hurts here, unlike Oracle)**, SL5, tiered trail. ⚠️ The deployed SL7/T2 exit at $0.20 spread LOST money
+> 2020→mid-2024 and only turned positive when XAU M1 ATR tripled in 2025 — the tt-trail was profitable through
+> the hard years too. Lab: `experiments/atlas_xau_entry_exit_lab/`. Rollback:
+> `models/atlas_xau_validated.pkl.bak_pre_tt_2026-07-02` (+ revert `edge_pullback.py` reads defaults-off anyway).
+
 > **🚀 STATUS 2026-06-30 — REPLACED with the `edge_pullback` engine (commit `064aeee`).**
 > The strict-candle XAU strategy was **DEAD** (8y holdout PF 0.95, 6 disconfirmations). It is **gone**.
 > Atlas XAU now runs the same **pullback + XGB-expected-R** edge deployed on hermes_dji.

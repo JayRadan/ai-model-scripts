@@ -1,5 +1,14 @@
 # Hermes DJI — M1 Dow Jones (US30)
 
+> **🆕 2026-07-02 — time-boxed-patience trail DEPLOYED (bundle `edge_pullback_v3_tt30_hermes_dji`, commit `399871b`).**
+> Server-side trail tightens 2×ATR → **0.75×ATR after 30 bars held** (`tight_after`/`tight_trail_R` bundle fields;
+> EA unchanged). Model/threshold/labels unchanged. Honest 8y WF @ 1.5pt spread: dev **+2,322R → +6,819R (9/9,
+> maxDD 331→95R)**, untouched 2025-26 holdout **+1,365R → +2,798R (3/3, WR 69→77%)**; at 2pt spread +1,115→+2,537R
+> (largely retires the thin-edge/spread caveat). Mechanism = time-boxing (uniform tight trail ≈ baseline): winners
+> resolve in ~30 bars, what's still open after that is drift. Same result found independently on atlas_xau first.
+> Lab: `experiments/atlas_xau_entry_exit_lab/run_lab_dji.py` + `dji_lab_equity.png`.
+> Rollback: `models/hermes_dji_validated.pkl.bak_pre_tt_2026-07-02`.
+
 > **🚀 STATUS 2026-06-30 — REPLACED with the `edge_pullback` engine (commit `064aeee`).**
 > The old combined-Q / `q_thr=3.0` strategy (which lost −$708 live over May–Jun) is **gone**.
 > New strategy = **pullback + XGB-expected-R** (see below). Server engine: `decision_engine/edge_pullback.py`,

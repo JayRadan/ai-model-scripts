@@ -110,7 +110,9 @@ def build(name, parquet, instr, extra=None):
     log(f"  WROTE {out.name}  version={payload['version']} thr={thr:.3f}")
     return thr
 
-build("hermes_dji", "/home/jay/Desktop/new-model-zigzag/data/m1_dji_full.parquet", INSTRUMENT_IDX_AMERICA_E_D_J_IND)
+build("hermes_dji", "/home/jay/Desktop/new-model-zigzag/data/m1_dji_full.parquet", INSTRUMENT_IDX_AMERICA_E_D_J_IND,
+      extra={"tight_after": 30, "tight_trail_R": 0.75,
+             "version": "edge_pullback_v3_tt30_hermes_dji"})  # tt-trail 2026-07-02, run_lab_dji.py
 build("atlas_xau",  "/home/jay/Desktop/new-model-zigzag/data/m1_xau_full.parquet",  INSTRUMENT_FX_METALS_XAU_USD,
       extra={"tight_after": 30, "tight_trail_R": 0.75,
              "version": "edge_pullback_v3_tt30_atlas_xau"})  # tt-trail 2026-07-02, experiments/atlas_xau_entry_exit_lab

@@ -1,0 +1,40 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    30s] edge features done
+[    35s] candidates 695,331
+[    50s] gate thr 0.622, gated 219,588 candidates (186,271 train / 33,317 holdout)
+[    50s]   pool P1: 51,812 episodes
+[    50s]   pool P2: 54,645 episodes
+[    50s]   pool P3: 53,212 episodes
+[    50s]   pool P4: 26,602 episodes
+[    50s] === RL gated-exit seed 0 ===
+[   249s]   seed 0 phase P1 done
+[   441s]   seed 0 phase P2 done
+[   636s]   seed 0 phase P3 done
+[   824s]   seed 0 phase P4 done
+[   887s]   seed 0 phase P5_recency done
+[  1116s] === RL gated-exit seed 1 ===
+[  1311s]   seed 1 phase P1 done
+[  1507s]   seed 1 phase P2 done
+[  1702s]   seed 1 phase P3 done
+[  1895s]   seed 1 phase P4 done
+[  1961s]   seed 1 phase P5_recency done
+
+====================================================================================================
+GATED RL EXIT vs deployed exits — same candidates, same gate, 1-slot (DJI)
+====================================================================================================
+
+--- TRAIN 2018-2024 ---
+exit policy                   n   net@1pt   net@1.5   net@2pt  PF@1.5   WR%  DD@1.5  hold
+SL7/T2 base               19736    +18863    +17126    +15389    1.56    72     128    58
+tt30/0.75 (deployed)      25471    +27195    +24872    +22548    1.94    77      78    34
+RL_exit seed0             17597     +9571     +8026     +6482    1.22    68     202    64
+RL_exit seed1             17110     +9840     +8355     +6870    1.23    61     153    67
+
+--- HOLDOUT 2025+ (untouched) ---
+exit policy                   n   net@1pt   net@1.5   net@2pt  PF@1.5   WR%  DD@1.5  hold
+SL7/T2 base                3827     +1387     +1135      +883    1.15    67     203    59
+tt30/0.75 (deployed)       4880     +3473     +3147     +2820    1.51    75      74    36
+RL_exit seed0              3456      -261      -489      -717    0.94    62     642    65
+RL_exit seed1              3377      -298      -518      -737    0.94    56     730    67
+[  2204s] gated RL exit lab done

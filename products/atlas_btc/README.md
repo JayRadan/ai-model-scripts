@@ -1,5 +1,14 @@
 # Atlas BTC — STRICT 2-bar candle reversal (Kalman + Hermes TFK), 8-YEAR deep retrain (Bitcoin)
 
+> **🆕 2026-07-02 — time-boxed-patience trail DEPLOYED (edge_predictor commit `42b6334`).**
+> Server-side trail tightens 2×ATR → **0.75×ATR after 30 bars held** (`tight_after_bars`/`tight_trail_atr` in
+> `configs/atlas_btc.py`, read by `decide_atlas.decide_exit` via getattr — defaults off, other atlas products
+> unchanged; EA unchanged). Model/labels/q_thr untouched. 8y WF overlay on the deploy-validation harness
+> (`experiments/atlas_xau_entry_exit_lab/run_lab_btc.py`): dev 2022-24 sumR +15,302→+19,464 medPF 1.43→1.70
+> (12/12), untouched holdout 2025+ **sumR +3,976→+6,280, medPF 1.26→1.68, WR 72→79%, 6/6 windows**. Third
+> independent confirmation of the same exit mechanism (after atlas_xau + hermes_dji, both edge_pullback).
+> Rollback: `git revert 42b6334`.
+
 > **✅ DEPLOYED (verified 2026-06-30):** Atlas strict-candle 2-bar reversal (TFK regime + M1 Kalman
 > confluence + strong prev-bar body), **8-year deep retrain** (2026-06-26). **M1 BTCUSD, 1 slot,
 > SL 6×ATR / trail 2×ATR / BE@0.5R, q≥3.0.** Live bundle has **no version** (standard atlas path).

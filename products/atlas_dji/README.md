@@ -1,5 +1,13 @@
 # Atlas DJI — M1 Kalman + TFK STRICT-candle reversal (Dow Jones)
 
+> **🆕 2026-07-02 — time-boxed-patience trail DEPLOYED (edge_predictor commit `51b3f6b`).**
+> Server-side trail tightens 2×ATR → **0.75×ATR after 30 bars held** (`tight_after_bars`/`tight_trail_atr`
+> in `configs/atlas_dji.py`; engine read shipped with atlas_btc's `42b6334`; EA unchanged). Model/q_thr
+> untouched. 8y WF overlay (`experiments/atlas_xau_entry_exit_lab/run_lab_dji_atlas.py`): dev 2022-24
+> sumR +2,445→+4,542 medPF 1.25→1.55 (12/12), untouched holdout 2025+ **+1,243→+2,089R, medPF 1.27→1.54,
+> WR 69→78%, 6/6 windows**. Fourth independent confirmation across 2 engines / 4 products.
+> Rollback: `git revert 51b3f6b`.
+
 > **✅ DEPLOYED (verified 2026-06-30):** Atlas strict-candle 2-bar reversal, **q≥3.0, 1 slot,
 > SL 6×ATR / trail 2×ATR / BE@0.5R**, M1 DJIUSD. **The one historically robust edge** (walk-forward
 > 10/10 windows positive). Live bundle has **no version** (standard atlas path). Catalog:

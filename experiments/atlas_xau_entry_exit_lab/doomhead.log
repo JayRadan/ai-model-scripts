@@ -1,0 +1,46 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[   39s] features done
+[   40s] base sim + snapshots...
+[   42s]   D30: snapshots on 33.1% of candidates; doom rate among snapped 24.0% (overall 16.6%)
+[   42s]   D2R: snapshots on 45.0% of candidates; doom rate among snapped 36.3% (overall 16.6%)
+[   70s] window 2020-07-01 done
+[   97s] window 2021-01-01 done
+[  124s] window 2021-07-01 done
+[  150s] window 2022-01-01 done
+[  179s] window 2022-07-01 done
+[  205s] window 2023-01-01 done
+[  228s] window 2023-07-01 done
+[  254s] window 2024-01-01 done
+[  276s] window 2024-07-01 done
+[  303s] window 2025-01-01 done
+[  328s] window 2025-07-01 done
+[  352s] window 2026-01-01 done
+
+AUC (train -> test, median across windows):
+  D30    0.918 -> 0.891   (12 windows)
+  D2R    0.784 -> 0.666   (12 windows)
+  ENTRY  0.697 -> 0.532   (12 windows)
+
+==================================================================
+DOOM-HEAD lab — DEV (selection)  (net @ $0.20)
+==================================================================
+variant           n   net@20c    w+   cuts
+base_tt       12640     +2512   8/9       0
+D30           12640     +2512   8/9       0
+D2R           12773     +2434   8/9     354
+
+==================================================================
+DOOM-HEAD lab — HOLDOUT (untouched)  (net @ $0.20)
+==================================================================
+variant           n   net@20c    w+   cuts
+base_tt        4080     +2113   3/3       0
+D30            4080     +2113   3/3       0
+D2R            4139     +2100   3/3     118
+
+ENTRY RISK-SIZING (same trades, weighted risk, mean weight normalized to 1):
+  unweighted  dev      sum    +2512R   maxDD    353R   dailySharpe  2.20
+  unweighted  holdout  sum    +2113R   maxDD     73R   dailySharpe  5.95
+  weighted    dev      sum    +3021R   maxDD    315R   dailySharpe  2.61
+  weighted    holdout  sum    +2291R   maxDD     88R   dailySharpe  5.67
+[  352s] doomhead lab done

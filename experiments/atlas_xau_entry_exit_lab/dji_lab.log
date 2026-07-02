@@ -1,0 +1,61 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    1s] 2,833,251 bars 2018-01-02 -> 2026-05-27
+[   33s] features done
+[   34s] candidates 695,332 | median ATR 7.21pt (2025+: 9.22pt)
+[   34s] global sims...
+[   37s]   base       fill 100.0%  mean gross R +0.451
+[   37s]   tt30_075   fill 100.0%  mean gross R +0.776
+[   37s]   tt30_05    fill 100.0%  mean gross R +0.913
+[   37s]   tt20_05    fill 100.0%  mean gross R +0.882
+[   37s]   tt45_075   fill 100.0%  mean gross R +0.753
+[   37s]   tt60_10    fill 100.0%  mean gross R +0.637
+[   37s]   uni1_05    fill 100.0%  mean gross R +0.441
+[   37s]   belock     fill 100.0%  mean gross R +0.330
+[   37s]   lim030     fill  80.9%  mean gross R +0.377
+[   37s]   confirm    fill  49.3%  mean gross R +0.465
+[   52s] window 2020-07-01 done
+[   67s] window 2021-01-01 done
+[   82s] window 2021-07-01 done
+[   98s] window 2022-01-01 done
+[  112s] window 2022-07-01 done
+[  128s] window 2023-01-01 done
+[  143s] window 2023-07-01 done
+[  155s] window 2024-01-01 done
+[  167s] window 2024-07-01 done
+[  177s] window 2025-01-01 done
+[  188s] window 2025-07-01 done
+[  199s] window 2026-01-01 done
+
+================================================================================================
+HERMES DJI lab — DEV windows (2020-07 .. 2024-12) — selection
+================================================================================================
+variant             n  /day   gross  net@1pt  net@1.5  net@2pt w+@1.5   WR%  DD@1.5
+V0_deployed     13103  11.3   +5414    +3352    +2322    +1291   9/9     67     331
+tt30_075        13189  11.4  +10104    +7914    +6819    +5724   9/9     74      95
+tt30_05         13186  11.4  +11472    +9271    +8171    +7070   9/9     76      83
+tt20_05         12992  11.2  +11011    +8835    +7748    +6660   9/9     76      65
+tt45_075        13396  11.5   +9966    +7759    +6655    +5551   9/9     73     165
+tt60_10         13361  11.5   +7813    +5637    +4549    +3461   9/9     71     153
+uni1_05         12931  11.1   +5327    +3133    +2037     +940   8/9     73     166
+X_belock        13145  11.3   +3675    +1601     +564     -473   6/9     63     655
+E_lim030        13188  11.4   +5202    +3095    +2042     +989   8/9     67     358
+E_confirm       13046  11.2   +5211    +3169    +2148    +1127   9/9     67     317
+
+================================================================================================
+HERMES DJI lab — HOLDOUT windows (2025-01 .. 2026-05) — untouched
+================================================================================================
+variant             n  /day   gross  net@1pt  net@1.5  net@2pt w+@1.5   WR%  DD@1.5
+V0_deployed      3962  11.0   +2113    +1614    +1365    +1115   3/3     69     136
+tt30_075         4106  11.4   +3579    +3058    +2798    +2537   3/3     77     101
+tt30_05          3989  11.1   +3961    +3460    +3209    +2959   3/3     79      91
+tt20_05          4133  11.5   +4035    +3511    +3249    +2986   3/3     79      65
+tt45_075         3966  11.0   +3169    +2668    +2418    +2167   3/3     75      75
+tt60_10          3975  11.1   +2824    +2321    +2070    +1819   3/3     73     103
+uni1_05          3882  10.8   +1834    +1345    +1101     +856   3/3     77      56
+X_belock         3996  11.1   +1677    +1173     +921     +669   3/3     66     141
+E_lim030         3946  10.9   +1737    +1238     +989     +739   3/3     67     251
+E_confirm        3976  11.0   +2554    +2050    +1798    +1546   3/3     69     133
+
+equity -> /home/jay/Desktop/new-model-zigzag/experiments/atlas_xau_entry_exit_lab/dji_lab_equity.png
+[  200s] dji lab done

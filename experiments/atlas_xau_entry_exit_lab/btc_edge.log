@@ -1,0 +1,37 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    1s] 4,082,748 bars 2018-01-01 -> 2026-05-02
+[   42s] features done
+[   43s] candidates 807,129 | median ATR $23 (2025+: $57) | spread grid = flat R units
+[   43s] sims...
+[   54s] window 2020-07-01 done
+[   65s] window 2021-01-01 done
+[   74s] window 2021-07-01 done
+[   84s] window 2022-01-01 done
+[   94s] window 2022-07-01 done
+[  103s] window 2023-01-01 done
+[  111s] window 2023-07-01 done
+[  119s] window 2024-01-01 done
+[  127s] window 2024-07-01 done
+[  135s] window 2025-01-01 done
+[  143s] window 2025-07-01 done
+[  151s] window 2026-01-01 done
+
+============================================================================================
+BTC M1 edge_pullback lab — DEV (2020-07..2024-12, selection)
+============================================================================================
+variant               n  /day  net@.1R  net@.2R  net@.3R  w+@.2   WR%   DD@.2
+base SL7/T2       16366  10.0   +14317   +12680   +11044   9/9     69     132
+tt30/0.75         16255   9.9   +18070   +16444   +14819   9/9     74     116
+tt30/0.5          16409  10.0   +19532   +17891   +16250   9/9     76      94
+uni1/0.5 ctrl     15175   9.3   +11359    +9841    +8324   9/9     77     114
+
+============================================================================================
+BTC M1 edge_pullback lab — HOLDOUT (2025+, untouched)
+============================================================================================
+variant               n  /day  net@.1R  net@.2R  net@.3R  w+@.2   WR%   DD@.2
+base SL7/T2        4872  10.0    +1895    +1408     +921   3/3     68     161
+tt30/0.75          5175  10.7    +4010    +3493    +2975   3/3     75      71
+tt30/0.5           5298  11.0    +4668    +4138    +3608   3/3     77      68
+uni1/0.5 ctrl      4752   9.8    +2330    +1854    +1379   3/3     77      84
+[  151s] btc edge lab done

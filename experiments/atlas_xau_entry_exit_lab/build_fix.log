@@ -1,0 +1,21 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    0s] === hermes_btc (bar_minutes=1) ===
+INFO:DUKASCRIPT:current timestamp :2026-05-21T20:21:00
+INFO:DUKASCRIPT:current timestamp :2026-06-11T17:53:00
+INFO:DUKASCRIPT:current timestamp :2026-07-02T13:57:00
+INFO:DUKASCRIPT:current timestamp :2026-07-07T07:37:00
+[    5s]   4,176,682 M1 bars -> 2026-07-07 05:37:00
+[   51s]   candidates 835,803, mean gross R +0.879
+[   75s]   backed up -> hermes_btc_validated.pkl.bak_pre_edge_fix_2026-07-07
+[   75s]   WROTE hermes_btc_validated.pkl  version=edge_pullback_v3_tt30_hermes_btc thr=1.171
+[   75s] === hermes_xau (bar_minutes=5) ===
+INFO:DUKASCRIPT:current timestamp :2026-05-29T19:31:00
+INFO:DUKASCRIPT:current timestamp :2026-06-30T17:31:00
+INFO:DUKASCRIPT:current timestamp :2026-07-07T07:39:00
+[   84s]   3,015,190 M1 bars -> 2026-07-07 05:39:00
+[   84s]   resampled to 603,415 M5 bars
+[   90s]   candidates 170,616, mean gross R +0.381
+[   97s]   backed up -> hermes_xau_validated.pkl.bak_pre_edge_fix_2026-07-07
+[   97s]   WROTE hermes_xau_validated.pkl  version=edge_pullback_v3_tt30m5_hermes_xau thr=0.134
+[   97s] bundles built

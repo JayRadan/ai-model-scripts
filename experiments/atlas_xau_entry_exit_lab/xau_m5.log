@@ -1,0 +1,37 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    1s] M5 bars: 590,753 (2018-01-01 -> 2026-05-01)
+[    8s] features done
+[    8s] candidates 167,123 | median M5 ATR $1.134 (2025+: $3.314) — spread-in-R at $0.20: 0.176R (vs ~0.43R on M1 pre-2025)
+[    9s] sims done
+[   12s] window 2020-07-01 done
+[   16s] window 2021-01-01 done
+[   20s] window 2021-07-01 done
+[   23s] window 2022-01-01 done
+[   26s] window 2022-07-01 done
+[   29s] window 2023-01-01 done
+[   32s] window 2023-07-01 done
+[   35s] window 2024-01-01 done
+[   39s] window 2024-07-01 done
+[   42s] window 2025-01-01 done
+[   45s] window 2025-07-01 done
+[   48s] window 2026-01-01 done
+
+============================================================================================
+XAU M5 edge_pullback lab — DEV (selection)
+============================================================================================
+variant                 n  /day  net@10c  net@20c  net@30c  w+@20   WR%   DD@20
+base SL7/T2 mh60     5103   4.4    +1459     +992     +525   8/9     61     134
+tt6/0.75             5670   4.9    +2407    +1853    +1299   9/9     72      94
+tt15/0.75            5768   5.0    +3327    +2768    +2210   9/9     73      94
+tt30/0.75            5869   5.1    +3994    +3444    +2893   9/9     73      93
+
+============================================================================================
+XAU M5 edge_pullback lab — HOLDOUT (untouched)
+============================================================================================
+variant                 n  /day  net@10c  net@20c  net@30c  w+@20   WR%   DD@20
+base SL7/T2 mh60     1474   4.3     +783     +732     +681   3/3     65      88
+tt6/0.75             1722   5.0     +912     +852     +792   3/3     77      42
+tt15/0.75            1701   5.0    +1171    +1111    +1052   3/3     77      56
+tt30/0.75            1692   4.9    +1431    +1371    +1311   3/3     76      50
+[   48s] xau m5 lab done

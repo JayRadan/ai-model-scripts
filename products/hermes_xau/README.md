@@ -1,4 +1,20 @@
-# Hermes XAU — M1 TFK-driven + order-flow Q (combined pullback / counter)
+# Hermes XAU — now runs the `edge_pullback` engine on **M5** (was: combined-Q, LOOK-AHEAD-CONTAMINATED)
+
+> **🚀 STATUS 2026-07-07 — REPLACED with `edge_pullback` tt-trail on M5 bars (edge_predictor commit `9af6f81`).**
+> **Why:** the old bundle (trained 2026-05-25, through Sep-25 cutoff) predated the causal-HTF fix
+> (look-ahead features, train≠serve skew) and the honest 8y retrain said the recipe loses (PF 0.82-0.85).
+> **Why M5:** atlas_xau already runs this edge on M1 — cloning it would double exposure on identical
+> signals. M5 gives different trades (window-corr 0.43 vs M1; M5 positive in ALL 12 WF windows incl.
+> 2023-H2 where M1 lost) and its ~2.2× larger ATR shrinks spread-in-R — XAU's historic weak point
+> (net@10c vs net@30c differ only ~9%).
+> **Config:** bundle `edge_pullback_v3_tt30m5_hermes_xau` (thr 0.134, `bar_minutes=5`), ~5 trades/day,
+> 1 slot; exit SL7×ATR(M5) + trail 2×ATR(M5) tightening to 0.75 after 30 M5 bars, maxhold 60 M5 (=300 M1).
+> **Engine:** `edge_pullback.py` M5 mode — signals only when an M5 bucket closes; entry at next M1 open
+> (= M5 open); EA stop multipliers auto-scaled by atr5/atr1; server exit trails M5 closes with M5 entry ATR.
+> **Validation** (`run_lab_xau_m5.py`, honest WF): dev **+3,444R, 9/9**; untouched holdout 2025+
+> **+1,371R, 3/3, WR 76%, DD 50R** @20c. Trained through 2026-07-07.
+> Rollback: `models/hermes_xau_validated.pkl.bak_pre_edge_fix_2026-07-07`. EA unchanged.
+
 
 > **✅ DEPLOYED (verified 2026-06-30):** TFK combined-Q (pullback ≤0.5 ATR **OR** counter ≥1.5 ATR),
 > **q≥1.0, 1 slot, SL 4×ATR / trail 3×ATR**, M1 XAUUSD (+ orderflow). **Reverted to first-deploy

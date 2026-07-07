@@ -1,4 +1,16 @@
-# Hermes BTC — M1 BTCUSD TFK + Order-Flow
+# Hermes BTC — now runs the `edge_pullback` engine (was: combined-Q, LOOK-AHEAD-CONTAMINATED)
+
+> **🚀 STATUS 2026-07-07 — REPLACED with `edge_pullback` tt-trail (edge_predictor commit `9af6f81`).**
+> **Why:** the old bundle (trained 2026-05-26) predated the causal-HTF fix — trained on look-ahead
+> m5/m15/h1 features (train≠serve skew) and honest revalidation said "BTC no edge" for that recipe.
+> Live losses were its true expectation.
+> **Now:** pullback |dist_tfk|≤1.0 + XGB gross-R gate (thr 1.171, ~11/day), exit SL7×ATR + trail 2×ATR
+> tightening to **0.75×ATR after 30 bars** (tt-trail), maxhold 300, 1 slot.
+> **Validation** (`experiments/atlas_xau_entry_exit_lab/run_lab_btc_edge.py`, 8y WF, train-only thresholds):
+> dev 2020-24 **+16,444R, 9/9 windows**; untouched holdout 2025+ **+3,493R, 3/3, WR 75%, DD 71R** @0.2R
+> spread (positive even @0.3R). Sixth product on the validated edge recipe. Trained through 2026-07-07.
+> Rollback: `models/hermes_btc_validated.pkl.bak_pre_edge_fix_2026-07-07`. EA unchanged.
+
 
 > **✅ DEPLOYED (verified 2026-06-30):** TFK combined-Q (pullback OR counter), **q≥2.5, 1 slot,
 > SL 4×ATR / trail 3×ATR**, M1 BTCUSD. Live bundle has **no version** (first-deploy / standard hermes path).

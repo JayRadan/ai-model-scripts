@@ -1,0 +1,77 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    0s] === xau_m1 ===
+[   42s]   window 2020-07-01 done
+[   52s]   window 2021-01-01 done
+[   62s]   window 2021-07-01 done
+[   72s]   window 2022-01-01 done
+[   81s]   window 2022-07-01 done
+[   91s]   window 2023-01-01 done
+[  100s]   window 2023-07-01 done
+[  110s]   window 2024-01-01 done
+[  120s]   window 2024-07-01 done
+[  130s]   window 2025-01-01 done
+[  139s]   window 2025-07-01 done
+[  149s]   window 2026-01-01 done
+
+----- xau_m1: net R by ENTRY-STRETCH quintile (DEV, n=12538) -----
+  ext_atr quintile edges: [ 7.1 10.6 14.6 20.6]
+  Q1 early-leg  dev   n= 2508  mean +0.187R  WR 68.7%
+  Q1 early-leg  hold  n= 1012  mean +0.495R  WR 76.9%
+  Q2            dev   n= 2507  mean +0.220R  WR 67.2%
+  Q2            hold  n=  962  mean +0.597R  WR 77.8%
+  Q3            dev   n= 2508  mean +0.220R  WR 67.1%
+  Q3            hold  n=  891  mean +0.643R  WR 77.9%
+  Q4            dev   n= 2507  mean +0.123R  WR 63.5%
+  Q4            hold  n=  763  mean +0.276R  WR 74.4%
+  Q5 stretched  dev   n= 2508  mean +0.069R  WR 61.1%
+  Q5 stretched  hold  n=  641  mean +0.617R  WR 76.9%
+  GATE cut Q5    dev   n=10030  sum    +1880R (vs all    +2054R)  per-trade +0.187 vs +0.164
+  GATE cut Q5    hold  n= 3628  sum    +1859R (vs all    +2254R)  per-trade +0.512 vs +0.528
+  GATE cut Q4+Q5 dev   n= 7523  sum    +1571R (vs all    +2054R)  per-trade +0.209 vs +0.164
+  GATE cut Q4+Q5 hold  n= 2865  sum    +1648R (vs all    +2254R)  per-trade +0.575 vs +0.528
+  --- rng_pos (0=early side, 1=entering at extreme) ---
+  rng 0.0-0.5  dev   n= 2109  mean -0.018R  WR 63.1%
+  rng 0.0-0.5  hold  n=  751  mean +0.413R  WR 75.6%
+  rng 0.5-0.8  dev   n= 7546  mean +0.263R  WR 67.3%
+  rng 0.5-0.8  hold  n= 2533  mean +0.560R  WR 77.3%
+  rng 0.8-1.0  dev   n= 2883  mean +0.036R  WR 62.7%
+  rng 0.8-1.0  hold  n=  985  mean +0.533R  WR 76.8%
+[  149s] === dji_m1 ===
+[  189s]   window 2020-07-01 done
+[  199s]   window 2021-01-01 done
+[  208s]   window 2021-07-01 done
+[  219s]   window 2022-01-01 done
+[  229s]   window 2022-07-01 done
+[  239s]   window 2023-01-01 done
+[  250s]   window 2023-07-01 done
+[  262s]   window 2024-01-01 done
+[  276s]   window 2024-07-01 done
+[  285s]   window 2025-01-01 done
+[  296s]   window 2025-07-01 done
+[  308s]   window 2026-01-01 done
+
+----- dji_m1: net R by ENTRY-STRETCH quintile (DEV, n=13120) -----
+  ext_atr quintile edges: [ 6.8 10.1 13.8 19.5]
+  Q1 early-leg  dev   n= 2624  mean +0.543R  WR 75.9%
+  Q1 early-leg  hold  n=  869  mean +0.837R  WR 80.3%
+  Q2            dev   n= 2624  mean +0.416R  WR 73.7%
+  Q2            hold  n=  805  mean +0.642R  WR 78.3%
+  Q3            dev   n= 2624  mean +0.533R  WR 73.0%
+  Q3            hold  n=  785  mean +0.560R  WR 74.5%
+  Q4            dev   n= 2624  mean +0.493R  WR 72.8%
+  Q4            hold  n=  782  mean +0.751R  WR 77.1%
+  Q5 stretched  dev   n= 2624  mean +0.382R  WR 70.7%
+  Q5 stretched  hold  n=  877  mean +0.894R  WR 76.2%
+  GATE cut Q5    dev   n=10496  sum    +5210R (vs all    +6212R)  per-trade +0.496 vs +0.473
+  GATE cut Q5    hold  n= 3241  sum    +2271R (vs all    +3055R)  per-trade +0.701 vs +0.742
+  GATE cut Q4+Q5 dev   n= 7872  sum    +3917R (vs all    +6212R)  per-trade +0.498 vs +0.473
+  GATE cut Q4+Q5 hold  n= 2459  sum    +1684R (vs all    +3055R)  per-trade +0.685 vs +0.742
+  --- rng_pos (0=early side, 1=entering at extreme) ---
+  rng 0.0-0.5  dev   n= 1947  mean +0.501R  WR 73.5%
+  rng 0.0-0.5  hold  n=  704  mean +0.975R  WR 81.1%
+  rng 0.5-0.8  dev   n= 7871  mean +0.466R  WR 73.5%
+  rng 0.5-0.8  hold  n= 2346  mean +0.543R  WR 76.0%
+  rng 0.8-1.0  dev   n= 3302  mean +0.476R  WR 72.3%
+  rng 0.8-1.0  hold  n= 1068  mean +1.025R  WR 77.6%
+[  308s] legpos lab done

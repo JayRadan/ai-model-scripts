@@ -1,0 +1,81 @@
+[v88] reverse-setup RL exit: threshold=5.0 min_bars=8  (env: EDGEPREDICTOR_V88_THRESHOLD / EDGEPREDICTOR_V88_MIN_BARS)
+[RL] regime-direction lock: ON  (Uptrend→long only, Downtrend→short only; env: EDGEPREDICTOR_RL_REGIME_LOCK=0 to disable)
+[    0s] === dji_m5 ===
+[    9s]   567,679 M5 bars, 147,671 candidates, median ATR 18.49
+[   14s]   window 2020-07-01 done
+[   17s]   window 2021-01-01 done
+[   20s]   window 2021-07-01 done
+[   23s]   window 2022-01-01 done
+[   26s]   window 2022-07-01 done
+[   30s]   window 2023-01-01 done
+[   33s]   window 2023-07-01 done
+[   35s]   window 2024-01-01 done
+[   41s]   window 2024-07-01 done
+[   45s]   window 2025-01-01 done
+[   50s]   window 2025-07-01 done
+[   53s]   window 2026-01-01 done
+
+===== dji_m5 (spreads [1.0, 1.5, 2.0] pts) =====
+--- DEV ---
+  base       n=  4758 net@1.0:    +805(6/9) net@1.5:    +660(6/9) net@2.0:    +515(6/9)
+  tt6/0.75   n=  5978 net@1.0:   +2895(9/9) net@1.5:   +2707(9/9) net@2.0:   +2518(9/9)
+  tt15/0.75  n=  6021 net@1.0:   +3508(9/9) net@1.5:   +3320(9/9) net@2.0:   +3133(9/9)
+  tt30/0.75  n=  5582 net@1.0:   +3368(9/9) net@1.5:   +3196(9/9) net@2.0:   +3023(9/9)
+--- HOLDOUT ---
+  base       n=  1419 net@1.0:    +324(3/3) net@1.5:    +289(3/3) net@2.0:    +253(3/3)
+  tt6/0.75   n=  1710 net@1.0:    +729(3/3) net@1.5:    +684(3/3) net@2.0:    +639(3/3)
+  tt15/0.75  n=  1795 net@1.0:    +811(3/3) net@1.5:    +764(3/3) net@2.0:    +718(3/3)
+  tt30/0.75  n=  1631 net@1.0:    +940(3/3) net@1.5:    +898(3/3) net@2.0:    +857(3/3)
+[   53s] === dji_m15 ===
+[   57s]   189,288 M15 bars, 45,589 candidates, median ATR 37.59
+[   59s]   window 2020-07-01 done
+[   61s]   window 2021-01-01 done
+[   64s]   window 2021-07-01 done
+[   66s]   window 2022-01-01 done
+[   69s]   window 2022-07-01 done
+[   72s]   window 2023-01-01 done
+[   75s]   window 2023-07-01 done
+[   77s]   window 2024-01-01 done
+[   78s]   window 2024-07-01 done
+[   80s]   window 2025-01-01 done
+[   82s]   window 2025-07-01 done
+[   83s]   window 2026-01-01 done
+
+===== dji_m15 (spreads [1.0, 1.5, 2.0] pts) =====
+--- DEV ---
+  base       n=  2298 net@1.0:    +163(6/9) net@1.5:    +127(6/9) net@2.0:     +90(5/9)
+  tt5/0.75   n=  2740 net@1.0:    +990(9/9) net@1.5:    +948(9/9) net@2.0:    +905(9/9)
+  tt10/0.75  n=  2565 net@1.0:   +1149(9/9) net@1.5:   +1109(9/9) net@2.0:   +1069(9/9)
+  tt15/0.75  n=  2405 net@1.0:   +1199(9/9) net@1.5:   +1161(9/9) net@2.0:   +1123(9/9)
+--- HOLDOUT ---
+  base       n=   705 net@1.0:    +386(3/3) net@1.5:    +377(3/3) net@2.0:    +369(3/3)
+  tt5/0.75   n=   830 net@1.0:    +432(3/3) net@1.5:    +422(3/3) net@2.0:    +411(3/3)
+  tt10/0.75  n=   781 net@1.0:    +555(3/3) net@1.5:    +545(3/3) net@2.0:    +535(3/3)
+  tt15/0.75  n=   745 net@1.0:    +656(3/3) net@1.5:    +646(3/3) net@2.0:    +637(3/3)
+[   83s] === btc_m5 ===
+[   93s]   828,876 M5 bars, 219,496 candidates, median ATR 54.86
+[   96s]   window 2020-07-01 done
+[   99s]   window 2021-01-01 done
+[  103s]   window 2021-07-01 done
+[  107s]   window 2022-01-01 done
+[  111s]   window 2022-07-01 done
+[  114s]   window 2023-01-01 done
+[  118s]   window 2023-07-01 done
+[  122s]   window 2024-01-01 done
+[  126s]   window 2024-07-01 done
+[  130s]   window 2025-01-01 done
+[  134s]   window 2025-07-01 done
+[  138s]   window 2026-01-01 done
+
+===== btc_m5 (spreads [0.1, 0.2, 0.3] R) =====
+--- DEV ---
+  base       n=  7491 net@0.1:   +2890(9/9) net@0.2:   +2141(9/9) net@0.3:   +1392(7/9)
+  tt6/0.75   n=  8103 net@0.1:   +4278(9/9) net@0.2:   +3468(9/9) net@0.3:   +2658(8/9)
+  tt15/0.75  n=  8456 net@0.1:   +5924(9/9) net@0.2:   +5079(9/9) net@0.3:   +4233(9/9)
+  tt30/0.75  n=  8361 net@0.1:   +6633(9/9) net@0.2:   +5796(9/9) net@0.3:   +4960(9/9)
+--- HOLDOUT ---
+  base       n=  2222 net@0.1:    +469(3/3) net@0.2:    +247(3/3) net@0.3:     +25(2/3)
+  tt6/0.75   n=  2210 net@0.1:   +1043(3/3) net@0.2:    +822(3/3) net@0.3:    +601(3/3)
+  tt15/0.75  n=  2308 net@0.1:   +1355(3/3) net@0.2:   +1124(3/3) net@0.3:    +894(3/3)
+  tt30/0.75  n=  2341 net@0.1:   +1432(3/3) net@0.2:   +1198(3/3) net@0.3:    +964(3/3)
+[  138s] multi-tf labs done

@@ -1,5 +1,16 @@
 # Hermes BTC — now runs the `edge_pullback` engine (was: combined-Q, LOOK-AHEAD-CONTAMINATED)
 
+> **🆕 2026-07-09 — q10 DOWNSIDE-QUANTILE entry gate DEPLOYED (bundle `edge_pullback_v4_q10_tt30_hermes_btc`, commit `e69b421`).**
+> Same features/exits/engine; only the XGB training objective changed: `reg:quantileerror` alpha=0.10 — the gate
+> now ranks entries by the predicted **10th-percentile** R of the live tt-exit distribution instead of the mean,
+> i.e. it skips entries with fat left tails, directly targeting SL-hitters. Honest WF (dev +15,835→+17,861R (9/9), holdout +3,631→+6,146R (3/3, +69%), SL-hit 17.2→15.9%).
+> Bundle trained on trailing 3y (a full-8y quantile fit degenerates: leaves with ≥10% SL-hitters collapse
+> predictions to −7); threshold -6.6600 train-calibrated to the deployed trades/day; note q10 thresholds live on a
+> different scale (≈ −6.5…−6.7) than the old mean thresholds. oracle_xau was NOT swapped (q10 dev-worse there).
+> Lab: `run_lab_slreduce.py` + `run_lab_q10_streams.py`, builder `build_q10_bundles.py`
+> (experiments/atlas_xau_entry_exit_lab/). Rollback: `models/*_validated.pkl.bak_pre_q10_2026-07-09`.
+
+
 > **🚀 STATUS 2026-07-07 — REPLACED with `edge_pullback` tt-trail (edge_predictor commit `9af6f81`).**
 > **Why:** the old bundle (trained 2026-05-26) predated the causal-HTF fix — trained on look-ahead
 > m5/m15/h1 features (train≠serve skew) and honest revalidation said "BTC no edge" for that recipe.

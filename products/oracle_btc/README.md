@@ -1,5 +1,16 @@
 # Oracle BTC — RL-Enhanced BTCUSD Model
 
+> **🆕 2026-07-09 — q10 DOWNSIDE-QUANTILE entry gate DEPLOYED (bundle `edge_pullback_v4_q10_tt30m5_oracle_btc`, commit `e69b421`).**
+> Same features/exits/engine; only the XGB training objective changed: `reg:quantileerror` alpha=0.10 — the gate
+> now ranks entries by the predicted **10th-percentile** R of the live tt-exit distribution instead of the mean,
+> i.e. it skips entries with fat left tails, directly targeting SL-hitters. Honest WF (dev +5,733→+5,883R (9/9), holdout +1,372→+1,566R (3/3), SL-hit 11.7→10.9%).
+> Bundle trained on trailing 3y (a full-8y quantile fit degenerates: leaves with ≥10% SL-hitters collapse
+> predictions to −7); threshold -6.5571 train-calibrated to the deployed trades/day; note q10 thresholds live on a
+> different scale (≈ −6.5…−6.7) than the old mean thresholds. oracle_xau was NOT swapped (q10 dev-worse there).
+> Lab: `run_lab_slreduce.py` + `run_lab_q10_streams.py`, builder `build_q10_bundles.py`
+> (experiments/atlas_xau_entry_exit_lab/). Rollback: `models/*_validated.pkl.bak_pre_q10_2026-07-09`.
+
+
 > **✅ DEPLOYED (verified 2026-06-30):** Oracle smart-pipeline (v99b dynamic-exit relabel, min_q 3)
 > + **breakeven-lock**. **M5 BTCUSD, 2 slots, hard SL 6×ATR.** Bundle `oracle_btc_validated.pkl`
 > version `v99b_dynamic_exit_relabel_minq3…`. Redeployed on deep retrain. Catalog: [`../README.md`](../README.md).

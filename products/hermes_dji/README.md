@@ -1,5 +1,16 @@
 # Hermes DJI — M1 Dow Jones (US30)
 
+> **🆕 2026-07-09 — q10 DOWNSIDE-QUANTILE entry gate DEPLOYED (bundle `edge_pullback_v4_q10_tt30_hermes_dji`, commit `e69b421`).**
+> Same features/exits/engine; only the XGB training objective changed: `reg:quantileerror` alpha=0.10 — the gate
+> now ranks entries by the predicted **10th-percentile** R of the live tt-exit distribution instead of the mean,
+> i.e. it skips entries with fat left tails, directly targeting SL-hitters. Honest WF (dev +6,853→+7,094R (9/9), holdout +2,953→+3,053R (3/3), SL-hit 16.75→15.77% holdout).
+> Bundle trained on trailing 3y (a full-8y quantile fit degenerates: leaves with ≥10% SL-hitters collapse
+> predictions to −7); threshold -6.7015 train-calibrated to the deployed trades/day; note q10 thresholds live on a
+> different scale (≈ −6.5…−6.7) than the old mean thresholds. oracle_xau was NOT swapped (q10 dev-worse there).
+> Lab: `run_lab_slreduce.py` + `run_lab_q10_streams.py`, builder `build_q10_bundles.py`
+> (experiments/atlas_xau_entry_exit_lab/). Rollback: `models/*_validated.pkl.bak_pre_q10_2026-07-09`.
+
+
 > **🆕 2026-07-02 — time-boxed-patience trail DEPLOYED (bundle `edge_pullback_v3_tt30_hermes_dji`, commit `399871b`).**
 > Server-side trail tightens 2×ATR → **0.75×ATR after 30 bars held** (`tight_after`/`tight_trail_R` bundle fields;
 > EA unchanged). Model/threshold/labels unchanged. Honest 8y WF @ 1.5pt spread: dev **+2,322R → +6,819R (9/9,

@@ -1,5 +1,16 @@
 # Hermes DJI — M1 Dow Jones (US30)
 
+> **🆕 2026-07-14 — HEDGE OVERLAY shipped, OFF by default (commit `1cce4ee`).** Jay's "control bad trades"
+> idea, validated: at bar-30 held, a dedicated head predicts the REVERSE trade's own net R (29 live feats +
+> main-trade path stats); if pred ≥ 0.1 the server opens ONE opposite-direction hedge with its own SL 2×ATR +
+> standard trail/tt exits. WF: dev +171R (7/9 windows @2pt spread), holdout +282R (3/3 @2pt), ~0.39R/hedge,
+> ~1 hedge per 6 trades (~+10%). Dynamic on/off re-hedging REJECTED (train −2-5kR — per-episode spread +
+> closing hedges into recoveries); XAU hedging failed 5×, DJI only. **Activate: `EDGEPREDICTOR_HEDGE=1` on
+> Render AND EA chart slots=2** (`max_concurrent` now 2; slot 2 is hedge-only — normal entries never stack).
+> Labs: run_lab_hedge_v2/v3.py, builder build_hedge_head_dji.py. Rollback: unset flag, or
+> `models/hermes_dji_validated.pkl.bak_pre_hedge_2026-07-14` + revert `1cce4ee`.
+
+
 > **🆕 2026-07-09 — q10 DOWNSIDE-QUANTILE entry gate DEPLOYED (bundle `edge_pullback_v4_q10_tt30_hermes_dji`, commit `e69b421`).**
 > Same features/exits/engine; only the XGB training objective changed: `reg:quantileerror` alpha=0.10 — the gate
 > now ranks entries by the predicted **10th-percentile** R of the live tt-exit distribution instead of the mean,
